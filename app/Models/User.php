@@ -47,7 +47,7 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-       public function purchases()
+    public function purchases()
     {
         return $this->hasMany(Purchase::class);
     }
@@ -55,7 +55,16 @@ class User extends Authenticatable
     public function events()
     {
         return $this->belongsToMany(Event::class, 'purchases')
-                    ->withPivot('ticket_number', 'amount', 'status')
-                    ->withTimestamps();
+            ->withPivot('ticket_number', 'amount', 'status')
+            ->withTimestamps();
+    }
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isCustomer()
+    {
+        return $this->role === 'customer';
     }
 }

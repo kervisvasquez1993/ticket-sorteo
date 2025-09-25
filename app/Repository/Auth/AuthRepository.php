@@ -2,42 +2,68 @@
 
 namespace App\Repository\Auth;
 
-use App\DTOs\Auth\DTOsAuth;
+use App\DTOs\Auth\DTOsLogin;
+use App\DTOs\Auth\DTOsRegister;
 use App\Interfaces\Auth\IAuthRepository;
-use App\Models\Auth;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
-class AuthRepository implements IAuthRepository 
+class AuthRepository implements IAuthRepository
 {
-    public function getAllAuths()
+    public function login(DTOsLogin $loginDTO): array
     {
-        $Auths = Auth::all();
-        return $Auths;
-    }
-    
-    public function getAuthById($id): Auth
-    {
-        $Auth = Auth::where('id', $id)->first();
-        if (!$Auth) {
-            throw new \Exception("No results found for Auth with ID {$id}");
+        try {
+            $credentials = $loginDTO->credentials();
+
+            Log::info('Intentando login con:', ['email' => $credentials['email']]);
+
+            if (!Auth::attempt($credentials)) {
+                Log::warning('Login fallido. Credenciales inválidas.', $credentials);
+
+                return [
+                    'success' => false,
+                    'message' => 'Invalid credentials'
+                ];
+            }
+
+            $user = Auth::user();
+
+            Log::info('Login exitoso para usuario:', ['id' => $user->id, 'email' => $user->email]);
+
+            return [
+                'success' => true,
+                'user' => $user
+            ];
+        } catch (\Exception $e) {
+            Log::error('Error en el login:', ['error' => $e->getMessage()]);
+
+            return [
+                'success' => false,
+                'message' => 'Unexpected error during login',
+                'error' => $e->getMessage()
+            ];
         }
-        return $Auth;
     }
-    
-    public function createAuth(DTOsAuth $data): Auth
+
+    public function createAccessToken(User $user): array
     {
-        $result = Auth::create($data->toArray());
-        return $result;
+        $tokenResult = $user->createToken('Personal Access Token');
+        $token = $tokenResult->token;
+        $token->save();
+
+        return [
+            'access_token' => $tokenResult->accessToken
+        ];
     }
-    
-    public function updateAuth(DTOsAuth $data, Auth $Auth): Auth
+    public function createUser(DTOsRegister $registerDTO): User
     {
-        $Auth->update($data->toArray());
-        return $Auth;
-    }
-    
-    public function deleteAuth(Auth $Auth): Auth
-    {
-        $Auth->delete();
-        return $Auth;
+        return User::create([
+            'username' => $registerDTO->getUsername(),
+            'email' => $registerDTO->getEmail(),
+            'password' => Hash::make($registerDTO->getPassword()),
+            'role' => $registerDTO->getRole(),
+        ]);
     }
 }

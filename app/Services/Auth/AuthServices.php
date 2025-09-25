@@ -3,97 +3,64 @@
 namespace App\Services\Auth;
 
 use App\DTOs\Auth\DTOsAuth;
+use App\DTOs\Auth\DTOsLogin;
+use App\DTOs\Auth\DTOsRegister;
 use App\Interfaces\Auth\IAuthServices;
 use App\Interfaces\Auth\IAuthRepository;
 use Exception;
 
-class AuthServices implements IAuthServices 
+class AuthServices implements IAuthServices
 {
     protected IAuthRepository $AuthRepository;
-    
+
     public function __construct(IAuthRepository $AuthRepositoryInterface)
     {
         $this->AuthRepository = $AuthRepositoryInterface;
     }
-    
-    public function getAllAuths()
+
+    public function login(DTOsLogin $loginDTO)
     {
         try {
-            $results = $this->AuthRepository->getAllAuths();
+            $authResult = $this->AuthRepository->login($loginDTO);
+
+            if (!$authResult['success']) {
+                return [
+                    'success' => false,
+                    'message' => 'The provided data is incorrect'
+                ];
+            }
+            $user = $authResult['user'];
+            $tokenResult = $this->AuthRepository->createAccessToken($user);
+
             return [
                 'success' => true,
-                'data' => $results
+                'data' => [
+                    'access_token' => $tokenResult['access_token'],
+                    'data' => $user
+                ]
             ];
-        } catch (Exception $exception) {
+        } catch (Exception $ex) {
             return [
                 'success' => false,
-                'message' => $exception->getMessage()
+                'message' => $ex->getMessage()
             ];
         }
     }
-    
-    public function getAuthById($id)
+
+    public function register(DTOsRegister $registerDTO)
     {
         try {
-            $results = $this->AuthRepository->getAuthById($id);
+            $user = $this->AuthRepository->createUser($registerDTO);
             return [
                 'success' => true,
-                'data' => $results
+                'data' =>  $user,
+                'error' => "test"
             ];
         } catch (Exception $exception) {
             return [
                 'success' => false,
-                'message' => $exception->getMessage()
-            ];
-        }
-    }
-    
-    public function createAuth(DTOsAuth $data)
-    {
-        try {
-            $results = $this->AuthRepository->createAuth($data);
-            return [
-                'success' => true,
-                'data' => $results
-            ];
-        } catch (Exception $exception) {
-            return [
-                'success' => false,
-                'message' => $exception->getMessage()
-            ];
-        }
-    }
-    
-    public function updateAuth(DTOsAuth $data, $id)
-    {
-        try {
-            $Auth = $this->AuthRepository->getAuthById($id);
-            $results = $this->AuthRepository->updateAuth($data, $Auth);
-            return [
-                'success' => true,
-                'data' => $results
-            ];
-        } catch (Exception $exception) {
-            return [
-                'success' => false,
-                'message' => $exception->getMessage()
-            ];
-        }
-    }
-    
-    public function deleteAuth($id)
-    {
-        try {
-            $Auth = $this->AuthRepository->getAuthById($id);
-            $results = $this->AuthRepository->deleteAuth($Auth);
-            return [
-                'success' => true,
-                'data' => $results
-            ];
-        } catch (Exception $exception) {
-            return [
-                'success' => false,
-                'message' => $exception->getMessage()
+                'message' => $exception->getMessage(),
+                'code' => "442"
             ];
         }
     }
