@@ -22,7 +22,7 @@ class CreateEventRequest extends FormRequest
             'description' => 'nullable|string',
             'start_number' => 'required|integer|min:0',
             'end_number' => 'required|integer|gt:start_number',
-            'price' => 'required|numeric|min:0',
+            // 'price' => 'required|numeric|min:0',
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after:start_date',
             'status' => 'nullable|in:active,completed,cancelled',

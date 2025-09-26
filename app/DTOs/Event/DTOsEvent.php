@@ -13,7 +13,6 @@ class DTOsEvent
         private readonly ?string $description,
         private readonly int $start_number,
         private readonly int $end_number,
-        private readonly float $price,
         private readonly string $start_date,
         private readonly string $end_date,
         private readonly string $status = 'active',
@@ -28,7 +27,6 @@ class DTOsEvent
             description: $validated['description'] ?? null,
             start_number: $validated['start_number'],
             end_number: $validated['end_number'],
-            price: $validated['price'],
             start_date: $validated['start_date'],
             end_date: $validated['end_date'],
             status: $validated['status'] ?? 'active',
@@ -44,7 +42,6 @@ class DTOsEvent
             description: $validated['description'] ?? null,
             start_number: $validated['start_number'],
             end_number: $validated['end_number'],
-            price: $validated['price'],
             start_date: $validated['start_date'],
             end_date: $validated['end_date'],
             status: $validated['status'] ?? 'active',
@@ -58,7 +55,6 @@ class DTOsEvent
             'description' => $this->description,
             'start_number' => $this->start_number,
             'end_number' => $this->end_number,
-            'price' => $this->price,
             'start_date' => $this->start_date,
             'end_date' => $this->end_date,
             'status' => $this->status,
@@ -86,10 +82,6 @@ class DTOsEvent
         return $this->end_number;
     }
 
-    public function getPrice(): float
-    {
-        return $this->price;
-    }
 
     public function getStartDate(): string
     {
