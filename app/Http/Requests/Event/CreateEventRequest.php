@@ -11,7 +11,6 @@ class CreateEventRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Solo admin puede crear eventos
         return Auth::check() && Auth::user()->isAdmin();
     }
 
@@ -22,10 +21,15 @@ class CreateEventRequest extends FormRequest
             'description' => 'nullable|string',
             'start_number' => 'required|integer|min:0',
             'end_number' => 'required|integer|gt:start_number',
-            // 'price' => 'required|numeric|min:0',
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after:start_date',
             'status' => 'nullable|in:active,completed,cancelled',
+
+            // Validación para prices
+            'prices' => 'required|array|min:1',
+            'prices.*.amount' => 'required|numeric|min:0',
+            'prices.*.currency' => 'required|string|in:BS,USD',
+            'prices.*.is_default' => 'required|boolean',
         ];
     }
 
@@ -34,21 +38,42 @@ class CreateEventRequest extends FormRequest
         return [
             'name.required' => 'El nombre del evento es obligatorio',
             'end_number.gt' => 'El número final debe ser mayor que el número inicial',
-            'price.min' => 'El precio debe ser mayor o igual a 0',
             'start_date.after_or_equal' => 'La fecha de inicio debe ser hoy o posterior',
             'end_date.after' => 'La fecha de fin debe ser posterior a la fecha de inicio',
+            'prices.required' => 'Debe incluir al menos un precio',
+            'prices.*.amount.required' => 'El monto es obligatorio',
+            'prices.*.amount.min' => 'El monto debe ser mayor o igual a 0',
+            'prices.*.currency.required' => 'La moneda es obligatoria',
+            'prices.*.currency.in' => 'La moneda debe ser BS o USD',
+            'prices.*.is_default.required' => 'Debe especificar si es precio por defecto',
         ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $prices = $this->input('prices', []);
+
+            // Validar que solo haya un precio por defecto
+            $defaultCount = collect($prices)->where('is_default', true)->count();
+            if ($defaultCount !== 1) {
+                $validator->errors()->add('prices', 'Debe haber exactamente un precio marcado como predeterminado');
+            }
+
+            // Validar que no haya monedas duplicadas
+            $currencies = collect($prices)->pluck('currency');
+            if ($currencies->count() !== $currencies->unique()->count()) {
+                $validator->errors()->add('prices', 'No puede haber precios duplicados para la misma moneda');
+            }
+        });
     }
 
     public function failedValidation(Validator $validator)
     {
-        throw new HttpResponseException(response()->json(
-            [
-                'message' => 'Errores de validación',
-                'data' => $validator->errors()
-            ],
-            422
-        ));
+        throw new HttpResponseException(response()->json([
+            'message' => 'Errores de validación',
+            'data' => $validator->errors()
+        ], 422));
     }
 
     protected function failedAuthorization()

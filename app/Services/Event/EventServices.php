@@ -102,16 +102,17 @@ class EventServices implements IEventServices
             // Validar que el rango sea razonable
             $totalNumbers = ($data->getEndNumber() - $data->getStartNumber()) + 1;
             if ($totalNumbers > 100000) {
-                throw new Exception('El rango de números es demasiado grande (máximo 100,000)');
+                throw new \Exception('El rango de números es demasiado grande (máximo 100,000)');
             }
 
             $results = $this->eventRepository->createEvent($data);
+
             return [
                 'success' => true,
                 'data' => $results,
-                'message' => 'Evento creado exitosamente'
+                'message' => 'Evento y precios creados exitosamente'
             ];
-        } catch (Exception $exception) {
+        } catch (\Exception $exception) {
             return [
                 'success' => false,
                 'message' => $exception->getMessage()
@@ -126,9 +127,11 @@ class EventServices implements IEventServices
 
             // Validar que no se modifiquen rangos si ya hay compras
             $hasPurchases = $event->purchases()->exists();
-            if ($hasPurchases &&
+            if (
+                $hasPurchases &&
                 ($data->getStartNumber() != $event->start_number ||
-                 $data->getEndNumber() != $event->end_number)) {
+                    $data->getEndNumber() != $event->end_number)
+            ) {
                 throw new Exception('No se pueden modificar los rangos de números si ya hay compras registradas');
             }
 

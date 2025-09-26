@@ -5,6 +5,7 @@ namespace App\Repository\Event;
 use App\DTOs\Event\DTOsEvent;
 use App\Interfaces\Event\IEventRepository;
 use App\Models\Event;
+use Illuminate\Support\Facades\DB;
 
 class EventRepository implements IEventRepository
 {
@@ -42,11 +43,25 @@ class EventRepository implements IEventRepository
         return $event;
     }
 
-    public function createEvent(DTOsEvent $data): Event
-    {
-        $result = Event::create($data->toArray());
-        return $result;
-    }
+public function createEvent(DTOsEvent $data): Event
+{
+    return DB::transaction(function () use ($data) {
+        $event = Event::create($data->toArray());
+
+        // Crear los precios asociados
+        foreach ($data->getPrices() as $priceData) {
+            $event->prices()->create([
+                'amount' => $priceData['amount'],
+                'currency' => $priceData['currency'],
+                'is_default' => $priceData['is_default'],
+                'is_active' => true
+            ]);
+        }
+        $event->load('prices');
+
+        return $event;
+    });
+}
 
     public function updateEvent(DTOsEvent $data, Event $event): Event
     {

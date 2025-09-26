@@ -4,7 +4,6 @@ namespace App\DTOs\Event;
 
 use App\Http\Requests\Event\CreateEventRequest;
 use App\Http\Requests\Event\UpdateEventRequest;
-use Illuminate\Support\Facades\Auth;
 
 class DTOsEvent
 {
@@ -15,6 +14,7 @@ class DTOsEvent
         private readonly int $end_number,
         private readonly string $start_date,
         private readonly string $end_date,
+        private readonly array $prices = [],
         private readonly string $status = 'active',
     ) {}
 
@@ -29,6 +29,7 @@ class DTOsEvent
             end_number: $validated['end_number'],
             start_date: $validated['start_date'],
             end_date: $validated['end_date'],
+            prices: $validated['prices'] ?? [],
             status: $validated['status'] ?? 'active',
         );
     }
@@ -44,6 +45,7 @@ class DTOsEvent
             end_number: $validated['end_number'],
             start_date: $validated['start_date'],
             end_date: $validated['end_date'],
+            prices: $validated['prices'] ?? [],
             status: $validated['status'] ?? 'active',
         );
     }
@@ -82,7 +84,6 @@ class DTOsEvent
         return $this->end_number;
     }
 
-
     public function getStartDate(): string
     {
         return $this->start_date;
@@ -96,5 +97,10 @@ class DTOsEvent
     public function getStatus(): string
     {
         return $this->status;
+    }
+
+    public function getPrices(): array
+    {
+        return $this->prices;
     }
 }
