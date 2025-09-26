@@ -35,7 +35,7 @@ class PurchaseRepository implements IPurchaseRepository
             'event_id' => $data->getEventId(),
             'event_price_id' => $data->getEventPriceId(),
             'payment_method_id' => $data->getPaymentMethodId(),
-            'amount' => $amount,
+            'amount' => $amount,  // Precio unitario
             'currency' => $data->getCurrency(),
             'status' => 'processing',
             'ticket_number' => null,
@@ -43,11 +43,10 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_reference' => $data->getPaymentReference(),
             'payment_proof_url' => $data->getPaymentProofUrl(),
             'quantity' => 1,
-            'total_amount' => $amount,
+            'total_amount' => $data->getTotalAmount(),  // ✅ Viene calculado del DTO
         ];
 
-        $result = Purchase::create($purchaseData);
-        return $result;
+        return Purchase::create($purchaseData);
     }
 
     public function updatePurchase(DTOsPurchase $data, Purchase $Purchase): Purchase

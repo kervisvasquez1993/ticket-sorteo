@@ -78,8 +78,8 @@ class PurchaseServices implements IPurchaseServices
             // Generar transaction_id único para agrupar las compras
             $transactionId = 'TXN-' . strtoupper(Str::random(12));
 
-            // Calcular total
-            $totalAmount = $eventPrice->amount * $data->getQuantity();
+            // ✅ El total ya viene calculado del DTO
+            $totalAmount = $data->getTotalAmount();
 
             $purchases = [];
             $specificNumbers = $data->getSpecificNumbers();
@@ -88,16 +88,18 @@ class PurchaseServices implements IPurchaseServices
             for ($i = 0; $i < $data->getQuantity(); $i++) {
                 $specificNumber = $specificNumbers[$i] ?? null;
 
+                // ✅ Crear un nuevo DTO para cada compra individual pero con el total completo
                 $purchaseData = new DTOsPurchase(
                     event_id: $data->getEventId(),
                     event_price_id: $data->getEventPriceId(),
                     payment_method_id: $data->getPaymentMethodId(),
                     quantity: 1,
-                    currency: $eventPrice->currency,
+                    currency: $data->getCurrency(),
                     user_id: $data->getUserId(),
                     specific_numbers: null,
                     payment_reference: $data->getPaymentReference(),
                     payment_proof_url: $data->getPaymentProofUrl(),
+                    total_amount: $totalAmount  // ✅ Pasar el total calculado
                 );
 
                 $purchase = $this->PurchaseRepository->createPurchase(
@@ -125,7 +127,7 @@ class PurchaseServices implements IPurchaseServices
                         'quantity' => $data->getQuantity(),
                         'unit_price' => number_format($eventPrice->amount, 2),
                         'total_amount' => number_format($totalAmount, 2),
-                        'currency' => $eventPrice->currency,
+                        'currency' => $data->getCurrency(),
                         'payment_method' => $purchases[0]->paymentMethod->name ?? 'N/A',
                         'payment_reference' => $data->getPaymentReference(),
                         'payment_proof' => $data->getPaymentProofUrl(),

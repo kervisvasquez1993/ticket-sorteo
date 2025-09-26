@@ -4,6 +4,7 @@ namespace App\DTOs\Purchase;
 
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
+use App\Models\EventPrice;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +21,7 @@ class DTOsPurchase
         private readonly ?array $specific_numbers = null,
         private readonly ?string $payment_reference = null,
         private readonly ?string $payment_proof_url = null,
+        private readonly ?float $total_amount = null,
     ) {}
 
     public static function fromRequest(CreatePurchaseRequest $request): self
@@ -27,16 +29,24 @@ class DTOsPurchase
         $validated = $request->validated();
         $paymentProofUrl = self::uploadPaymentProofToS3($request);
 
+        // ✅ Obtener el EventPrice para calcular el total
+        $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
+        $quantity = $validated['quantity'] ?? 1;
+
+        // ✅ Calcular el total automáticamente
+        $totalAmount = $eventPrice->amount * $quantity;
+
         return new self(
             event_id: $validated['event_id'],
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
-            quantity: $validated['quantity'] ?? 1,
-            currency: $validated['currency'] ?? null,
+            quantity: $quantity,
+            currency: $validated['currency'] ?? $eventPrice->currency, // ✅ Usar currency del precio si no viene
             user_id: Auth::id(),
             specific_numbers: $validated['specific_numbers'] ?? null,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
+            total_amount: $totalAmount, // ✅ Total calculado
         );
     }
 
@@ -58,7 +68,7 @@ class DTOsPurchase
             ]);
 
             if ($uploaded) {
-                // Retornar URL completa (ajusta según tu región)
+                // Retornar URL completa
                 $url = "https://backend-imagen-br.s3.us-east-2.amazonaws.com/" . $fileName;
 
                 Log::info('Payment proof uploaded successfully', [
@@ -72,20 +82,27 @@ class DTOsPurchase
 
         return null;
     }
+
     public static function fromUpdateRequest(UpdatePurchaseRequest $request): self
     {
         $validated = $request->validated();
+
+        // ✅ Calcular total también en el update si es necesario
+        $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
+        $quantity = $validated['quantity'] ?? 1;
+        $totalAmount = $eventPrice->amount * $quantity;
 
         return new self(
             event_id: $validated['event_id'],
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
-            quantity: $validated['quantity'] ?? 1,
-            currency: $validated['currency'] ?? null,
+            quantity: $quantity,
+            currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::id(),
             specific_numbers: $validated['specific_numbers'] ?? null,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: null,
+            total_amount: $totalAmount,
         );
     }
 
@@ -101,9 +118,11 @@ class DTOsPurchase
             'specific_numbers' => $this->specific_numbers,
             'payment_reference' => $this->payment_reference,
             'payment_proof_url' => $this->payment_proof_url,
+            'total_amount' => $this->total_amount, // ✅ Incluir en el array
         ], fn($value) => !is_null($value));
     }
 
+    // Getters
     public function getEventId(): int
     {
         return $this->event_id;
@@ -147,5 +166,11 @@ class DTOsPurchase
     public function getPaymentProofUrl(): ?string
     {
         return $this->payment_proof_url;
+    }
+
+    // ✅ Getter para el total calculado
+    public function getTotalAmount(): ?float
+    {
+        return $this->total_amount;
     }
 }
