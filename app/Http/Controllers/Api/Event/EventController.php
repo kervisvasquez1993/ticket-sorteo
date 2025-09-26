@@ -129,35 +129,35 @@ class EventController extends Controller
         }
         return response()->json($result['data'], 200);
     }
-    public function availableNumbers($id)
-    {
-        try {
-            $event = Event::findOrFail($id);
+    // public function availableNumbers($id)
+    // {
+    //     try {
+    //         $event = Event::findOrFail($id);
 
-            if (!$event->isActive()) {
-                return response()->json([
-                    'error' => 'El evento no está activo'
-                ], 422);
-            }
+    //         if (!$event->isActive()) {
+    //             return response()->json([
+    //                 'error' => 'El evento no está activo'
+    //             ], 422);
+    //         }
 
-            $availableNumbers = $event->getAvailableNumbers();
+    //         $availableNumbers = $event->getAvailableNumbers();
 
-            return response()->json([
-                'event_id' => $event->id,
-                'event_name' => $event->name,
-                'available_count' => count($availableNumbers),
-                'available_numbers' => $availableNumbers,
-                'range' => [
-                    'start' => $event->start_number,
-                    'end' => $event->end_number
-                ]
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 422);
-        }
-    }
+    //         return response()->json([
+    //             'event_id' => $event->id,
+    //             'event_name' => $event->name,
+    //             'available_count' => count($availableNumbers),
+    //             'available_numbers' => $availableNumbers,
+    //             'range' => [
+    //                 'start' => $event->start_number,
+    //                 'end' => $event->end_number
+    //             ]
+    //         ], 200);
+    //     } catch (\Exception $e) {
+    //         return response()->json([
+    //             'error' => $e->getMessage()
+    //         ], 422);
+    //     }
+    // }
 
     /**
      * Obtener estadísticas de un evento

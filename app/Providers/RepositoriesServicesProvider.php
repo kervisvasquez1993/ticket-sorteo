@@ -8,12 +8,16 @@ use App\Interfaces\Event\IEventRepository;
 use App\Interfaces\Event\IEventServices;
 use App\Interfaces\PaymentMethod\IPaymentMethodRepository;
 use App\Interfaces\PaymentMethod\IPaymentMethodServices;
+use App\Interfaces\Purchase\IPurchaseRepository;
+use App\Interfaces\Purchase\IPurchaseServices;
 use App\Repository\Auth\AuthRepository;
 use App\Repository\Event\EventRepository;
 use App\Repository\PaymentMethod\PaymentMethodRepository;
+use App\Repository\Purchase\PurchaseRepository;
 use App\Services\Auth\AuthServices;
 use App\Services\Event\EventServices;
 use App\Services\PaymentMethod\PaymentMethodServices;
+use App\Services\Purchase\PurchaseServices;
 use Illuminate\Support\ServiceProvider;
 
 class RepositoriesServicesProvider extends ServiceProvider

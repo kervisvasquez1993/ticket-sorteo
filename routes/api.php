@@ -11,15 +11,10 @@ Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/register', [AuthController::class, 'register'])->name('register');
 
 Route::middleware('auth:api')->group(function () {
-    Route::get('/events/active', [EventController::class, 'active']);
-    Route::get('/events/{id}', [EventController::class, 'show']);
+
     Route::apiResource('purchases', PurchaseController::class);
     Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
-    Route::get('events/{id}/available-numbers', [EventController::class, 'availableNumbers']);
-    Route::get('events/{id}/statistics', [EventController::class, 'statistics']);
-    Route::get('events/{id}/check-number/{number}', [EventController::class, 'checkNumber']);
-    Route::get('events/{id}/occupied-numbers', [EventController::class, 'occupiedNumbers']);
-    Route::get('/events/{id}/available-numbers', [EventController::class, 'availableNumbers']);
+
     Route::prefix('payment-methods')->group(function () {
         Route::get('/active', [PaymentMethodController::class, 'active']);
         Route::middleware(['admin'])->group(function () {
@@ -32,8 +27,15 @@ Route::middleware('auth:api')->group(function () {
         });
     });
     Route::middleware('admin')->group(function () {
+
+        Route::get('events/{id}/statistics', [EventController::class, 'statistics']);
+        Route::get('events/{id}/check-number/{number}', [EventController::class, 'checkNumber']);
+        Route::get('events/{id}/occupied-numbers', [EventController::class, 'occupiedNumbers']);
+        Route::get('/events/{id}/available-numbers', [EventController::class, 'availableNumbers']);
         Route::get('/events', [EventController::class, 'index']);
         Route::post('/events', [EventController::class, 'store']);
+        Route::get('/events/active', [EventController::class, 'active']);
+        Route::get('/events/{id}', [EventController::class, 'show']);
         Route::put('/events/{id}', [EventController::class, 'update']);
         Route::delete('/events/{id}', [EventController::class, 'destroy']);
         Route::post('/events/{id}/select-winner', [EventController::class, 'selectWinner']);
