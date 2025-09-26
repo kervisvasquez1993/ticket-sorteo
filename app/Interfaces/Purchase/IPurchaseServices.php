@@ -12,4 +12,5 @@ interface IPurchaseServices
     public function updatePurchase(DTOsPurchase $data, $id);
     public function deletePurchase($id);
     public function getUserPurchases($userId);
+    public function getPurchaseSummary($transactionId);
 }

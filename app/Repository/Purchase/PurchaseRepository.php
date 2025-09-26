@@ -28,7 +28,7 @@ class PurchaseRepository implements IPurchaseRepository
         return $Purchase;
     }
 
-    public function createPurchase(DTOsPurchase $data, $amount): Purchase
+    public function createPurchase(DTOsPurchase $data, $amount, $transactionId = null): Purchase
     {
         $purchaseData = [
             'user_id' => $data->getUserId(),
@@ -37,8 +37,13 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_method_id' => $data->getPaymentMethodId(),
             'amount' => $amount,
             'currency' => $data->getCurrency(),
-            'status' => 'processing', // Inicialmente en processing
-            'ticket_number' => null, // Se asignará en el job
+            'status' => 'processing',
+            'ticket_number' => null,
+            'transaction_id' => $transactionId,
+            'payment_reference' => $data->getPaymentReference(),
+            'payment_proof_url' => $data->getPaymentProofUrl(),
+            'quantity' => 1,
+            'total_amount' => $amount,
         ];
 
         $result = Purchase::create($purchaseData);
@@ -87,5 +92,12 @@ class PurchaseRepository implements IPurchaseRepository
         return !Purchase::where('event_id', $eventId)
             ->where('ticket_number', $ticketNumber)
             ->exists();
+    }
+
+    public function getPurchasesByTransaction($transactionId)
+    {
+        return Purchase::with(['event', 'eventPrice', 'paymentMethod', 'user'])
+            ->where('transaction_id', $transactionId)
+            ->get();
     }
 }

@@ -11,6 +11,8 @@ use App\Models\EventPrice;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+
 
 class PurchaseServices implements IPurchaseServices
 {
@@ -73,6 +75,12 @@ class PurchaseServices implements IPurchaseServices
                 $this->validateSpecificNumbers($event, $data->getSpecificNumbers());
             }
 
+            // Generar transaction_id único para agrupar las compras
+            $transactionId = 'TXN-' . strtoupper(Str::random(12));
+
+            // Calcular total
+            $totalAmount = $eventPrice->amount * $data->getQuantity();
+
             $purchases = [];
             $specificNumbers = $data->getSpecificNumbers();
 
@@ -87,10 +95,16 @@ class PurchaseServices implements IPurchaseServices
                     quantity: 1,
                     currency: $eventPrice->currency,
                     user_id: $data->getUserId(),
-                    specific_numbers: null
+                    specific_numbers: null,
+                    payment_reference: $data->getPaymentReference(),
+                    payment_proof_url: $data->getPaymentProofUrl(),
                 );
 
-                $purchase = $this->PurchaseRepository->createPurchase($purchaseData, $eventPrice->amount);
+                $purchase = $this->PurchaseRepository->createPurchase(
+                    $purchaseData,
+                    $eventPrice->amount,
+                    $transactionId
+                );
 
                 // Despachar job para asignar número
                 AssignTicketNumberJob::dispatch($purchase->id, $specificNumber);
@@ -100,12 +114,32 @@ class PurchaseServices implements IPurchaseServices
 
             DB::commit();
 
+            // Respuesta mejorada con resumen
             return [
                 'success' => true,
-                'data' => $purchases,
-                'message' => 'Compra procesada. Los números se asignarán en breve.'
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'summary' => [
+                        'event_id' => $event->id,
+                        'event_name' => $event->name,
+                        'quantity' => $data->getQuantity(),
+                        'unit_price' => number_format($eventPrice->amount, 2),
+                        'total_amount' => number_format($totalAmount, 2),
+                        'currency' => $eventPrice->currency,
+                        'payment_method' => $purchases[0]->paymentMethod->name ?? 'N/A',
+                        'payment_reference' => $data->getPaymentReference(),
+                        'payment_proof' => $data->getPaymentProofUrl(),
+                        'status' => 'processing',
+                        'created_at' => now()->toDateTimeString(),
+                    ],
+                    'ticket_numbers' => [
+                        'status' => 'Los números se están asignando',
+                        'requested_numbers' => $specificNumbers ?? 'Aleatorios',
+                    ],
+                    'purchase_ids' => array_column($purchases, 'id'),
+                ],
+                'message' => 'Compra procesada exitosamente. Los números de ticket se asignarán en breve.'
             ];
-
         } catch (Exception $exception) {
             DB::rollBack();
             Log::error('Error creating purchase: ' . $exception->getMessage());
@@ -188,6 +222,45 @@ class PurchaseServices implements IPurchaseServices
             return [
                 'success' => true,
                 'data' => $results
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+    public function getPurchaseSummary($transactionId)
+    {
+        try {
+            $purchases = $this->PurchaseRepository->getPurchasesByTransaction($transactionId);
+
+            if ($purchases->isEmpty()) {
+                throw new Exception("No se encontró la transacción {$transactionId}");
+            }
+
+            $first = $purchases->first();
+            $totalAmount = $purchases->sum('amount');
+            $ticketNumbers = $purchases->whereNotNull('ticket_number')->pluck('ticket_number')->toArray();
+
+            return [
+                'success' => true,
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'event' => [
+                        'id' => $first->event->id,
+                        'name' => $first->event->name,
+                    ],
+                    'quantity' => $purchases->count(),
+                    'total_amount' => number_format($totalAmount, 2),
+                    'currency' => $first->currency,
+                    'payment_method' => $first->paymentMethod->name,
+                    'payment_reference' => $first->payment_reference,
+                    'payment_proof' => $first->payment_proof_url,
+                    'ticket_numbers' => $ticketNumbers,
+                    'status' => $purchases->first()->status,
+                    'created_at' => $first->created_at->toDateTimeString(),
+                ]
             ];
         } catch (Exception $exception) {
             return [

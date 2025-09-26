@@ -20,12 +20,20 @@ return new class extends Migration
             $table->string('currency', 10);
             $table->enum('status', ['processing', 'pending', 'completed', 'failed', 'refunded'])->default('pending');
             $table->string('transaction_id')->nullable();
+
+            // Nuevos campos para comprobante
+            $table->string('payment_reference')->nullable(); // Referencia del pago (número de transferencia, etc)
+            $table->text('payment_proof_url'); // URL del comprobante en S3
+            $table->integer('quantity')->default(1); // Cantidad de tickets en esta compra
+            $table->decimal('total_amount', 10, 2)->nullable(); // Total de la compra
+
             $table->timestamps();
 
             // Constraints
             $table->unique(['event_id', 'ticket_number']);
             $table->index(['event_id', 'status']);
             $table->index('user_id');
+            $table->index('transaction_id');
         });
     }
 

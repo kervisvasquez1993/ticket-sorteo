@@ -10,19 +10,11 @@ use Illuminate\Validation\Rule;
 
 class CreatePurchaseRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return Auth::check();
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
@@ -72,7 +64,7 @@ class CreatePurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'min:1',
-                'max:100', // Límite de tickets por compra
+                'max:100',
             ],
             'currency' => [
                 'nullable',
@@ -95,6 +87,17 @@ class CreatePurchaseRequest extends FormRequest
                     }
                 },
             ],
+            'payment_reference' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'payment_proof_url' => [
+                'required',
+                'file',
+                'mimes:jpeg,jpg,png,pdf',
+                'max:5120', // 5MB
+            ],
         ];
     }
 
@@ -104,20 +107,17 @@ class CreatePurchaseRequest extends FormRequest
             'event_id.required' => 'El evento es obligatorio.',
             'event_id.exists' => 'El evento seleccionado no existe.',
             'event_price_id.required' => 'El precio es obligatorio.',
-            'event_price_id.exists' => 'El precio seleccionado no existe.',
             'payment_method_id.required' => 'El método de pago es obligatorio.',
-            'payment_method_id.exists' => 'El método de pago seleccionado no existe.',
             'quantity.required' => 'La cantidad es obligatoria.',
             'quantity.min' => 'Debe comprar al menos 1 ticket.',
             'quantity.max' => 'Solo puede comprar hasta 100 tickets por vez.',
-            'specific_numbers.array' => 'Los números específicos deben ser un arreglo.',
-            'specific_numbers.*.integer' => 'Todos los números deben ser enteros.',
+            'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
+            'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
+            'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
+            'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
         ];
     }
 
-    /**
-     * Handle a failed validation attempt.
-     */
     public function failedValidation(Validator $validator)
     {
         throw new HttpResponseException(response()->json(
@@ -129,9 +129,6 @@ class CreatePurchaseRequest extends FormRequest
         ));
     }
 
-    /**
-     * Handle a failed authorization attempt.
-     */
     protected function failedAuthorization()
     {
         throw new HttpResponseException(response()->json([

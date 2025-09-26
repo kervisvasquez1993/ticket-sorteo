@@ -15,6 +15,7 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('purchases', PurchaseController::class);
     Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
 
+
     Route::prefix('payment-methods')->group(function () {
         Route::get('/active', [PaymentMethodController::class, 'active']);
         Route::middleware(['admin'])->group(function () {
@@ -27,6 +28,7 @@ Route::middleware('auth:api')->group(function () {
         });
     });
     Route::middleware('admin')->group(function () {
+        Route::get('purchases/summary/{transactionId}', [PurchaseController::class, 'purchaseSummary']);
 
         Route::get('events/{id}/statistics', [EventController::class, 'statistics']);
         Route::get('events/{id}/check-number/{number}', [EventController::class, 'checkNumber']);

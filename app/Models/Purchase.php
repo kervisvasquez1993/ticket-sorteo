@@ -18,7 +18,11 @@ class Purchase extends Model
         'amount',
         'currency',
         'status',
-        'transaction_id'
+        'transaction_id',
+        'payment_reference',        // NUEVO
+        'payment_proof_url',        // NUEVO
+        'quantity',                 // NUEVO
+        'total_amount',
     ];
 
     protected $casts = [

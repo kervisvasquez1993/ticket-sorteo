@@ -9,10 +9,12 @@ interface IPurchaseRepository
 {
     public function getAllPurchases();
     public function getPurchaseById($id): Purchase;
-    public function createPurchase(DTOsPurchase $data, $amount): Purchase;
+
     public function updatePurchase(DTOsPurchase $data, Purchase $Purchase): Purchase;
     public function deletePurchase(Purchase $Purchase): Purchase;
     public function getUserPurchases($userId);
     public function getPurchasesByEvent($eventId);
     public function isNumberAvailable($eventId, $ticketNumber): bool;
+    public function createPurchase(DTOsPurchase $data, $amount, $transactionId = null): Purchase;
+    public function getPurchasesByTransaction($transactionId);
 }
