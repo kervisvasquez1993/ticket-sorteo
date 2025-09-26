@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Event\EventController;
+use App\Http\Controllers\Api\PaymentMethod\PaymentMethodController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -12,6 +13,17 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/events/active', [EventController::class, 'active']);
     Route::get('/events/{id}', [EventController::class, 'show']);
     Route::get('/events/{id}/available-numbers', [EventController::class, 'availableNumbers']);
+    Route::prefix('payment-methods')->group(function () {
+        Route::get('/active', [PaymentMethodController::class, 'active']);
+        Route::middleware(['admin'])->group(function () {
+            Route::get('/', [PaymentMethodController::class, 'index']);
+            Route::post('/', [PaymentMethodController::class, 'store']);
+            Route::get('/{id}', [PaymentMethodController::class, 'show']);
+            Route::put('/{id}', [PaymentMethodController::class, 'update']);
+            Route::delete('/{id}', [PaymentMethodController::class, 'destroy']);
+            Route::patch('/{id}/toggle-active', [PaymentMethodController::class, 'toggleActive']);
+        });
+    });
     Route::middleware('admin')->group(function () {
         Route::get('/events', [EventController::class, 'index']);
         Route::post('/events', [EventController::class, 'store']);

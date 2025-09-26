@@ -12,11 +12,17 @@ class Purchase extends Model
     protected $fillable = [
         'user_id',
         'event_id',
+        'event_price_id',
+        'payment_method_id',
         'ticket_number',
         'amount',
+        'currency',
         'status',
-        'payment_method',
         'transaction_id'
+    ];
+
+    protected $casts = [
+        'amount' => 'decimal:2'
     ];
 
     public function user()
@@ -27,5 +33,15 @@ class Purchase extends Model
     public function event()
     {
         return $this->belongsTo(Event::class);
+    }
+
+    public function eventPrice()
+    {
+        return $this->belongsTo(EventPrice::class);
+    }
+
+    public function paymentMethod()
+    {
+        return $this->belongsTo(PaymentMethod::class);
     }
 }

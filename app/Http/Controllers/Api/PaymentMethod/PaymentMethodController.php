@@ -9,82 +9,127 @@ use App\Http\Requests\PaymentMethod\UpdatePaymentMethodRequest;
 use App\Interfaces\PaymentMethod\IPaymentMethodServices;
 use Illuminate\Http\Request;
 
-class PaymentMethodController extends Controller 
+class PaymentMethodController extends Controller
 {
-    protected IPaymentMethodServices $PaymentMethodServices;
-    
-    public function __construct(IPaymentMethodServices $PaymentMethodServicesInterface)
+    protected IPaymentMethodServices $paymentMethodServices;
+
+    public function __construct(IPaymentMethodServices $paymentMethodServicesInterface)
     {
-        $this->PaymentMethodServices = $PaymentMethodServicesInterface;
+        $this->paymentMethodServices = $paymentMethodServicesInterface;
     }
-    
+
     /**
-     * Display a listing of the resource.
+     * Display a listing of all payment methods.
      */
     public function index()
     {
-        $result = $this->PaymentMethodServices->getAllPaymentMethods();
+        $result = $this->paymentMethodServices->getAllPaymentMethods();
+
         if (!$result['success']) {
-            return response()->json([
-                'error' => $result['message']
-            ], 422);
+            return response()->json(['error' => $result['message']], 422);
         }
+
         return response()->json($result['data'], 200);
     }
-    
+
+    /**
+     * Display a listing of active payment methods.
+     */
+    public function active()
+    {
+        $result = $this->paymentMethodServices->getActivePaymentMethods();
+
+        if (!$result['success']) {
+            return response()->json(['error' => $result['message']], 422);
+        }
+
+        return response()->json($result['data'], 200);
+    }
+
     /**
      * Store a newly created resource in storage.
      */
     public function store(CreatePaymentMethodRequest $request)
     {
-        $result = $this->PaymentMethodServices->createPaymentMethod(DTOsPaymentMethod::fromRequest($request));
+        $result = $this->paymentMethodServices->createPaymentMethod(
+            DTOsPaymentMethod::fromRequest($request)
+        );
+
         if (!$result['success']) {
-            return response()->json([
-                'error' => $result['message']
-            ], 422);
+            return response()->json(['error' => $result['message']], 422);
         }
-        return response()->json($result['data'], 201);
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 201);
     }
-    
+
     /**
      * Display the specified resource.
      */
     public function show(string $id)
     {
-        $result = $this->PaymentMethodServices->getPaymentMethodById($id);
+        $result = $this->paymentMethodServices->getPaymentMethodById($id);
+
         if (!$result['success']) {
-            return response()->json([
-                'error' => $result['message']
-            ], 422);
+            return response()->json(['error' => $result['message']], 404);
         }
+
         return response()->json($result['data'], 200);
     }
-    
+
     /**
      * Update the specified resource in storage.
      */
     public function update(UpdatePaymentMethodRequest $request, string $id)
     {
-        $result = $this->PaymentMethodServices->updatePaymentMethod(DTOsPaymentMethod::fromUpdateRequest($request), $id);
+        $result = $this->paymentMethodServices->updatePaymentMethod(
+            DTOsPaymentMethod::fromUpdateRequest($request),
+            $id
+        );
+
         if (!$result['success']) {
-            return response()->json([
-                'error' => $result['message']
-            ], 422);
+            return response()->json(['error' => $result['message']], 422);
         }
-        return response()->json($result['data'], 200);
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
     }
-    
+
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(string $id)
     {
-        $result = $this->PaymentMethodServices->deletePaymentMethod($id);
+        $result = $this->paymentMethodServices->deletePaymentMethod($id);
+
         if (!$result['success']) {
-            return response()->json([
-                'error' => $result['message']
-            ], 422);
+            return response()->json(['error' => $result['message']], 422);
         }
-        return response()->json($result['data'], 200);
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
+    }
+
+    /**
+     * Toggle active status of payment method.
+     */
+    public function toggleActive(string $id)
+    {
+        $result = $this->paymentMethodServices->toggleActive($id);
+
+        if (!$result['success']) {
+            return response()->json(['error' => $result['message']], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
     }
 }
