@@ -12,7 +12,7 @@ class Purchase extends Model
     protected $fillable = [
         'user_id',
         'event_id',
-        'ticket_number',     // El número asignado al azar (ya no number_id)
+        'ticket_number',
         'amount',
         'status',
         'payment_method',
