@@ -23,6 +23,8 @@ class RepositoriesServicesProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(IPurchaseRepository::class, PurchaseRepository::class);
+        $this->app->bind(IPurchaseServices::class, PurchaseServices::class);
         $this->app->bind(IPaymentMethodRepository::class, PaymentMethodRepository::class);
         $this->app->bind(IPaymentMethodServices::class, PaymentMethodServices::class);
         $this->app->bind(IEventRepository::class, EventRepository::class);
