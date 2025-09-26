@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Event\CreateEventRequest;
 use App\Http\Requests\Event\UpdateEventRequest;
 use App\Interfaces\Event\IEventServices;
+use App\Models\Event;
 use Illuminate\Http\Request;
 
 class EventController extends Controller
@@ -127,5 +128,117 @@ class EventController extends Controller
             return response()->json(['error' => $result['message']], 422);
         }
         return response()->json($result['data'], 200);
+    }
+    public function availableNumbers($id)
+    {
+        try {
+            $event = Event::findOrFail($id);
+
+            if (!$event->isActive()) {
+                return response()->json([
+                    'error' => 'El evento no está activo'
+                ], 422);
+            }
+
+            $availableNumbers = $event->getAvailableNumbers();
+
+            return response()->json([
+                'event_id' => $event->id,
+                'event_name' => $event->name,
+                'available_count' => count($availableNumbers),
+                'available_numbers' => $availableNumbers,
+                'range' => [
+                    'start' => $event->start_number,
+                    'end' => $event->end_number
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Obtener estadísticas de un evento
+     */
+    public function statistics($id)
+    {
+        try {
+            $event = Event::with(['prices', 'purchases'])->findOrFail($id);
+            $statistics = $event->getStatistics();
+
+            return response()->json([
+                'event' => [
+                    'id' => $event->id,
+                    'name' => $event->name,
+                    'status' => $event->status,
+                    'start_date' => $event->start_date,
+                    'end_date' => $event->end_date,
+                ],
+                'statistics' => $statistics
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Verificar si un número específico está disponible
+     */
+    public function checkNumber($id, $number)
+    {
+        try {
+            $event = Event::findOrFail($id);
+
+            if (!$event->isActive()) {
+                return response()->json([
+                    'error' => 'El evento no está activo'
+                ], 422);
+            }
+
+            $isAvailable = $event->isNumberAvailable($number);
+
+            return response()->json([
+                'event_id' => $event->id,
+                'number' => $number,
+                'is_available' => $isAvailable,
+                'message' => $isAvailable
+                    ? 'El número está disponible'
+                    : 'El número ya está ocupado'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Obtener números ocupados de un evento (para mostrar en la interfaz)
+     */
+    public function occupiedNumbers($id)
+    {
+        try {
+            $event = Event::findOrFail($id);
+
+            $occupiedNumbers = $event->purchases()
+                ->whereNotNull('ticket_number')
+                ->where('status', '!=', 'failed')
+                ->pluck('ticket_number')
+                ->toArray();
+
+            return response()->json([
+                'event_id' => $event->id,
+                'occupied_count' => count($occupiedNumbers),
+                'occupied_numbers' => $occupiedNumbers
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 422);
+        }
     }
 }

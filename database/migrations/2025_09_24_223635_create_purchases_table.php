@@ -17,7 +17,7 @@ return new class extends Migration
             $table->integer('ticket_number');
             $table->decimal('amount', 10, 2);
             $table->string('currency', 10);
-            $table->enum('status', ['pending', 'completed', 'failed', 'refunded'])->default('pending');
+            $table->enum('status', ['processing', 'pending', 'completed', 'failed', 'refunded'])->default('pending');
             $table->string('transaction_id')->nullable();
             $table->timestamps();
 
