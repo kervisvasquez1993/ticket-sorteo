@@ -8,6 +8,7 @@ use App\Interfaces\Purchase\IPurchaseRepository;
 use App\Jobs\AssignTicketNumberJob;
 use App\Models\Event;
 use App\Models\EventPrice;
+use App\Models\Purchase;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -69,26 +70,17 @@ class PurchaseServices implements IPurchaseServices
             if ($availableCount < $data->getQuantity()) {
                 throw new Exception("Solo quedan {$availableCount} números disponibles.");
             }
-
-            // Si hay números específicos, validar que no estén ocupados
-            if ($data->getSpecificNumbers()) {
-                $this->validateSpecificNumbers($event, $data->getSpecificNumbers());
-            }
-
             // Generar transaction_id único para agrupar las compras
             $transactionId = 'TXN-' . strtoupper(Str::random(12));
 
-            // ✅ El total ya viene calculado del DTO
+            // El total ya viene calculado del DTO
             $totalAmount = $data->getTotalAmount();
 
             $purchases = [];
             $specificNumbers = $data->getSpecificNumbers();
-
-            // Crear las compras sin números asignados
             for ($i = 0; $i < $data->getQuantity(); $i++) {
                 $specificNumber = $specificNumbers[$i] ?? null;
 
-                // ✅ Crear un nuevo DTO para cada compra individual pero con el total completo
                 $purchaseData = new DTOsPurchase(
                     event_id: $data->getEventId(),
                     event_price_id: $data->getEventPriceId(),
@@ -96,10 +88,10 @@ class PurchaseServices implements IPurchaseServices
                     quantity: 1,
                     currency: $data->getCurrency(),
                     user_id: $data->getUserId(),
-                    specific_numbers: null,
+                    specific_numbers: null, // NO asignar aún
                     payment_reference: $data->getPaymentReference(),
                     payment_proof_url: $data->getPaymentProofUrl(),
-                    total_amount: $totalAmount  // ✅ Pasar el total calculado
+                    total_amount: $totalAmount
                 );
 
                 $purchase = $this->PurchaseRepository->createPurchase(
@@ -107,16 +99,9 @@ class PurchaseServices implements IPurchaseServices
                     $eventPrice->amount,
                     $transactionId
                 );
-
-                // Despachar job para asignar número
-                AssignTicketNumberJob::dispatch($purchase->id, $specificNumber);
-
                 $purchases[] = $purchase;
             }
-
             DB::commit();
-
-            // Respuesta mejorada con resumen
             return [
                 'success' => true,
                 'data' => [
@@ -131,16 +116,16 @@ class PurchaseServices implements IPurchaseServices
                         'payment_method' => $purchases[0]->paymentMethod->name ?? 'N/A',
                         'payment_reference' => $data->getPaymentReference(),
                         'payment_proof' => $data->getPaymentProofUrl(),
-                        'status' => 'processing',
+                        'status' => 'pending', // ✅ Cambiar a pending
                         'created_at' => now()->toDateTimeString(),
                     ],
                     'ticket_numbers' => [
-                        'status' => 'Los números se están asignando',
+                        'status' => 'Los números se asignarán una vez se verifique el pago',
                         'requested_numbers' => $specificNumbers ?? 'Aleatorios',
                     ],
                     'purchase_ids' => array_column($purchases, 'id'),
                 ],
-                'message' => 'Compra procesada exitosamente. Los números de ticket se asignarán en breve.'
+                'message' => 'Compra registrada exitosamente. Estamos verificando tu pago y te notificaremos cuando sea aprobado.'
             ];
         } catch (Exception $exception) {
             DB::rollBack();
@@ -201,18 +186,7 @@ class PurchaseServices implements IPurchaseServices
     /**
      * Validar números específicos
      */
-    private function validateSpecificNumbers(Event $event, array $numbers): void
-    {
-        $usedNumbers = $event->purchases()
-            ->whereIn('ticket_number', $numbers)
-            ->pluck('ticket_number')
-            ->toArray();
 
-        if (!empty($usedNumbers)) {
-            $usedList = implode(', ', $usedNumbers);
-            throw new Exception("Los siguientes números ya están ocupados: {$usedList}");
-        }
-    }
 
     /**
      * Obtener compras del usuario autenticado
@@ -265,6 +239,97 @@ class PurchaseServices implements IPurchaseServices
                 ]
             ];
         } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    public function approvePurchase(string $transactionId): array
+    {
+        try {
+            DB::beginTransaction();
+
+            // Obtener todas las compras de esta transacción
+            $purchases = Purchase::where('transaction_id', $transactionId)
+                ->where('status', 'pending')
+                ->get();
+
+            if ($purchases->isEmpty()) {
+                throw new Exception('No se encontraron compras pendientes con este transaction_id');
+            }
+
+            $event = Event::findOrFail($purchases->first()->event_id);
+
+            // Cambiar status a 'processing'
+            foreach ($purchases as $purchase) {
+                $purchase->update(['status' => 'processing']);
+            }
+
+            // AHORA SÍ asignar números
+            foreach ($purchases as $purchase) {
+                AssignTicketNumberJob::dispatch($purchase->id, null);
+            }
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'message' => 'Pago aprobado. Los números se están asignando.',
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'purchases_count' => $purchases->count(),
+                ]
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+            Log::error('Error approving purchase: ' . $exception->getMessage());
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    public function rejectPurchase(string $transactionId, string $reason = null): array
+    {
+        try {
+            DB::beginTransaction();
+
+            // Obtener todas las compras de esta transacción
+            $purchases = Purchase::where('transaction_id', $transactionId)
+                ->where('status', 'pending')
+                ->get();
+
+            if ($purchases->isEmpty()) {
+                throw new Exception('No se encontraron compras pendientes con este transaction_id');
+            }
+
+            // Cambiar status a 'failed' o 'rejected'
+            foreach ($purchases as $purchase) {
+                $purchase->update([
+                    'status' => 'failed',
+                    // Podrías agregar un campo 'rejection_reason' si quieres
+                ]);
+            }
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'message' => 'Compra rechazada correctamente.',
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'purchases_count' => $purchases->count(),
+                    'reason' => $reason
+                ]
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+            Log::error('Error rejecting purchase: ' . $exception->getMessage());
+
             return [
                 'success' => false,
                 'message' => $exception->getMessage()
