@@ -5,6 +5,7 @@ namespace App\Repository\Purchase;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\Interfaces\Purchase\IPurchaseRepository;
 use App\Models\Purchase;
+use Illuminate\Support\Facades\DB;
 
 class PurchaseRepository implements IPurchaseRepository
 {
@@ -98,5 +99,142 @@ class PurchaseRepository implements IPurchaseRepository
         return Purchase::with(['event', 'eventPrice', 'paymentMethod', 'user'])
             ->where('transaction_id', $transactionId)
             ->get();
+    }
+    public function getGroupedPurchases()
+    {
+        return Purchase::select(
+            'transaction_id',
+            DB::raw('MIN(id) as first_purchase_id'),
+            DB::raw('MIN(created_at) as created_at'),
+            DB::raw('COUNT(*) as quantity'),
+            DB::raw('SUM(amount) as total_amount'),
+            'currency',
+            'status',
+            'event_id',
+            'payment_method_id',
+            'payment_reference',
+            'payment_proof_url',
+            'user_id'
+        )
+            ->with([
+                'event:id,name',
+                'paymentMethod:id,name',
+                'user:id,name,email'
+            ])
+            ->groupBy(
+                'transaction_id',
+                'currency',
+                'status',
+                'event_id',
+                'payment_method_id',
+                'payment_reference',
+                'payment_proof_url',
+                'user_id'
+            )
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($group) {
+                // Obtener los IDs de todas las compras del grupo
+                $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
+                    ->pluck('id')
+                    ->toArray();
+
+                // Obtener los números de ticket asignados
+                $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
+                    ->whereNotNull('ticket_number')
+                    ->pluck('ticket_number')
+                    ->toArray();
+
+                return [
+                    'transaction_id' => $group->transaction_id,
+                    'event' => [
+                        'id' => $group->event->id,
+                        'name' => $group->event->name
+                    ],
+                    'user' => [
+                        'id' => $group->user->id,
+                        'name' => $group->user->name,
+                        'email' => $group->user->email
+                    ],
+                    'quantity' => $group->quantity,
+                    'unit_price' => number_format($group->total_amount / $group->quantity, 2),
+                    'total_amount' => number_format($group->total_amount, 2),
+                    'currency' => $group->currency,
+                    'payment_method' => $group->paymentMethod->name ?? 'N/A',
+                    'payment_reference' => $group->payment_reference,
+                    'payment_proof' => $group->payment_proof_url,
+                    'status' => $group->status,
+                    'ticket_numbers' => empty($ticketNumbers) ?
+                        'Pendiente de asignación' : $ticketNumbers,
+                    'purchase_ids' => $purchaseIds,
+                    'created_at' => $group->created_at->toDateTimeString()
+                ];
+            });
+    }
+
+    /**
+     * Obtener compras agrupadas del usuario
+     */
+    public function getGroupedUserPurchases($userId)
+    {
+        return Purchase::select(
+            'transaction_id',
+            DB::raw('MIN(id) as first_purchase_id'),
+            DB::raw('MIN(created_at) as created_at'),
+            DB::raw('COUNT(*) as quantity'),
+            DB::raw('SUM(amount) as total_amount'),
+            'currency',
+            'status',
+            'event_id',
+            'payment_method_id',
+            'payment_reference',
+            'payment_proof_url'
+        )
+            ->where('user_id', $userId)
+            ->with([
+                'event:id,name',
+                'paymentMethod:id,name'
+            ])
+            ->groupBy(
+                'transaction_id',
+                'currency',
+                'status',
+                'event_id',
+                'payment_method_id',
+                'payment_reference',
+                'payment_proof_url'
+            )
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($group) {
+                $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
+                    ->pluck('id')
+                    ->toArray();
+
+                $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
+                    ->whereNotNull('ticket_number')
+                    ->pluck('ticket_number')
+                    ->toArray();
+
+                return [
+                    'transaction_id' => $group->transaction_id,
+                    'event' => [
+                        'id' => $group->event->id,
+                        'name' => $group->event->name
+                    ],
+                    'quantity' => $group->quantity,
+                    'unit_price' => number_format($group->total_amount / $group->quantity, 2),
+                    'total_amount' => number_format($group->total_amount, 2),
+                    'currency' => $group->currency,
+                    'payment_method' => $group->paymentMethod->name ?? 'N/A',
+                    'payment_reference' => $group->payment_reference,
+                    'payment_proof' => $group->payment_proof_url,
+                    'status' => $group->status,
+                    'ticket_numbers' => empty($ticketNumbers) ?
+                        'Pendiente de asignación' : $ticketNumbers,
+                    'purchase_ids' => $purchaseIds,
+                    'created_at' => $group->created_at->toDateTimeString()
+                ];
+            });
     }
 }

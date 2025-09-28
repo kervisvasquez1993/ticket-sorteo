@@ -26,18 +26,19 @@ class PurchaseServices implements IPurchaseServices
 
     public function getAllPurchases()
     {
-        try {
-            $results = $this->PurchaseRepository->getAllPurchases();
-            return [
-                'success' => true,
-                'data' => $results
-            ];
-        } catch (Exception $exception) {
-            return [
-                'success' => false,
-                'message' => $exception->getMessage()
-            ];
-        }
+      try {
+        $results = $this->PurchaseRepository->getGroupedPurchases();
+        return [
+            'success' => true,
+            'data' => $results,
+            'message' => 'Compras agrupadas obtenidas exitosamente'
+        ];
+    } catch (Exception $exception) {
+        return [
+            'success' => false,
+            'message' => $exception->getMessage()
+        ];
+    }
     }
 
     public function getPurchaseById($id)
@@ -330,6 +331,24 @@ class PurchaseServices implements IPurchaseServices
             DB::rollBack();
             Log::error('Error rejecting purchase: ' . $exception->getMessage());
 
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+
+    public function getUserPurchasesGrouped($userId)
+    {
+        try {
+            $results = $this->PurchaseRepository->getGroupedUserPurchases($userId);
+            return [
+                'success' => true,
+                'data' => $results,
+                'message' => 'Compras del usuario agrupadas obtenidas exitosamente'
+            ];
+        } catch (Exception $exception) {
             return [
                 'success' => false,
                 'message' => $exception->getMessage()

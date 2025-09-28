@@ -11,17 +11,182 @@ class EventRepository implements IEventRepository
 {
     public function getAllEvents()
     {
-        return Event::with('purchases.user')
-                    ->orderBy('created_at', 'desc')
-                    ->get();
+        return Event::select([
+            'events.id',
+            'events.name',
+            'events.description',
+            'events.start_number',
+            'events.end_number',
+            'events.start_date',
+            'events.end_date',
+            'events.status',
+            'events.winner_number',
+            'events.created_at',
+            'events.updated_at'
+        ])
+            ->withCount([
+                'purchases as total_purchases',
+                'purchases as pending_purchases' => function ($query) {
+                    $query->where('status', 'pending');
+                },
+                'purchases as completed_purchases' => function ($query) {
+                    $query->where('status', 'completed');
+                },
+                'purchases as processing_purchases' => function ($query) {
+                    $query->where('status', 'processing');
+                },
+                'purchases as failed_purchases' => function ($query) {
+                    $query->where('status', 'failed');
+                },
+                'purchases as refunded_purchases' => function ($query) {
+                    $query->where('status', 'refunded');
+                }
+            ])
+            ->addSelect([
+                // Suma total de ingresos por estado
+                'total_revenue' => function ($query) {
+                    $query->selectRaw('COALESCE(SUM(total_amount), 0)')
+                        ->from('purchases')
+                        ->whereColumn('purchases.event_id', 'events.id');
+                },
+
+                'pending_revenue' => function ($query) {
+                    $query->selectRaw('COALESCE(SUM(total_amount), 0)')
+                        ->from('purchases')
+                        ->whereColumn('purchases.event_id', 'events.id')
+                        ->where('purchases.status', 'pending');
+                },
+
+                'completed_revenue' => function ($query) {
+                    $query->selectRaw('COALESCE(SUM(total_amount), 0)')
+                        ->from('purchases')
+                        ->whereColumn('purchases.event_id', 'events.id')
+                        ->where('purchases.status', 'completed');
+                },
+
+                // Cantidad total de tickets vendidos
+                'total_tickets_sold' => function ($query) {
+                    $query->selectRaw('COALESCE(SUM(quantity), 0)')
+                        ->from('purchases')
+                        ->whereColumn('purchases.event_id', 'events.id');
+                }
+            ])
+            ->orderBy('events.created_at', 'desc')
+            ->get()
+            ->map(function ($event) {
+                // Obtener las últimas 5 compras por separado
+
+
+                // Calcular tickets disponibles
+                $totalTickets = $event->end_number - $event->start_number + 1;
+                $ticketsSold = intval($event->total_tickets_sold ?? 0);
+                $percentageSold = $totalTickets > 0 ? round(($ticketsSold / $totalTickets) * 100, 2) : 0;
+
+                // Agregar estadísticas
+                $event->statistics = [
+                    'total_purchases' => $event->total_purchases,
+                    'purchases_by_status' => [
+                        'pending' => $event->pending_purchases,
+                        'completed' => $event->completed_purchases,
+                        'processing' => $event->processing_purchases,
+                        'failed' => $event->failed_purchases,
+                        'refunded' => $event->refunded_purchases,
+                    ],
+                    'revenue_summary' => [
+                        'total' => floatval($event->total_revenue ?? 0),
+                        'pending' => floatval($event->pending_revenue ?? 0),
+                        'completed' => floatval($event->completed_revenue ?? 0),
+                    ],
+                    'tickets_summary' => [
+                        'total_available' => $totalTickets,
+                        'total_sold' => $ticketsSold,
+                        'available' => $totalTickets - $ticketsSold,
+                        'percentage_sold' => $percentageSold
+                    ]
+                ];
+
+                // Remover propiedades temporales
+                unset(
+                    $event->total_purchases,
+                    $event->pending_purchases,
+                    $event->completed_purchases,
+                    $event->processing_purchases,
+                    $event->failed_purchases,
+                    $event->refunded_purchases,
+                    $event->total_revenue,
+                    $event->pending_revenue,
+                    $event->completed_revenue,
+                    $event->total_tickets_sold
+                );
+
+                return $event;
+            });
+    }
+
+    // Método alternativo más simple si prefieres menos consultas
+    public function getAllEventsSimple()
+    {
+        return Event::select([
+            'id',
+            'name',
+            'description',
+            'start_number',
+            'end_number',
+            'start_date',
+            'end_date',
+            'status',
+            'winner_number',
+            'created_at',
+            'updated_at'
+        ])
+            ->withCount('purchases as total_purchases')
+            ->with([
+                'purchases' => function ($query) {
+                    $query->select([
+                        'id',
+                        'event_id',
+                        'user_id',
+                        'status',
+                        'total_amount',
+                        'quantity',
+                        'created_at'
+                    ])
+                        ->with('user:id,name,email')
+                        ->latest()
+                        ->limit(5);
+                }
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($event) {
+                // Calcular estadísticas a partir de las compras cargadas
+                $purchases = $event->purchases;
+
+                $event->statistics = [
+                    'total_purchases' => $event->total_purchases,
+                    'purchases_by_status' => [
+                        'pending' => $purchases->where('status', 'pending')->count(),
+                        'completed' => $purchases->where('status', 'completed')->count(),
+                        'processing' => $purchases->where('status', 'processing')->count(),
+                        'failed' => $purchases->where('status', 'failed')->count(),
+                        'refunded' => $purchases->where('status', 'refunded')->count(),
+                    ],
+                    'recent_revenue' => $purchases->sum('total_amount'),
+                ];
+
+                $event->recent_purchases = $purchases->take(5);
+                unset($event->purchases, $event->total_purchases);
+
+                return $event;
+            });
     }
 
     public function getActiveEvents()
     {
         return Event::where('status', 'active')
-                    ->where('end_date', '>=', now())
-                    ->orderBy('created_at', 'desc')
-                    ->get();
+            ->where('end_date', '>=', now())
+            ->orderBy('created_at', 'desc')
+            ->get();
     }
 
     public function getEventById($id): Event
@@ -33,9 +198,9 @@ class EventRepository implements IEventRepository
     public function getEventWithParticipants($id): Event
     {
         $event = Event::with([
-            'purchases' => function($query) {
+            'purchases' => function ($query) {
                 $query->where('status', 'completed')
-                      ->orderBy('created_at', 'desc');
+                    ->orderBy('created_at', 'desc');
             },
             'purchases.user'
         ])->findOrFail($id);
@@ -43,25 +208,25 @@ class EventRepository implements IEventRepository
         return $event;
     }
 
-public function createEvent(DTOsEvent $data): Event
-{
-    return DB::transaction(function () use ($data) {
-        $event = Event::create($data->toArray());
+    public function createEvent(DTOsEvent $data): Event
+    {
+        return DB::transaction(function () use ($data) {
+            $event = Event::create($data->toArray());
 
-        // Crear los precios asociados
-        foreach ($data->getPrices() as $priceData) {
-            $event->prices()->create([
-                'amount' => $priceData['amount'],
-                'currency' => $priceData['currency'],
-                'is_default' => $priceData['is_default'],
-                'is_active' => true
-            ]);
-        }
-        $event->load('prices');
+            // Crear los precios asociados
+            foreach ($data->getPrices() as $priceData) {
+                $event->prices()->create([
+                    'amount' => $priceData['amount'],
+                    'currency' => $priceData['currency'],
+                    'is_default' => $priceData['is_default'],
+                    'is_active' => true
+                ]);
+            }
+            $event->load('prices');
 
-        return $event;
-    });
-}
+            return $event;
+        });
+    }
 
     public function updateEvent(DTOsEvent $data, Event $event): Event
     {
@@ -79,9 +244,9 @@ public function createEvent(DTOsEvent $data): Event
     {
         // Obtener todos los números usados en UNA consulta
         $usedNumbers = $event->purchases()
-                             ->where('status', 'completed')
-                             ->pluck('ticket_number')
-                             ->toArray();
+            ->where('status', 'completed')
+            ->pluck('ticket_number')
+            ->toArray();
 
         // Crear rango completo
         $allNumbers = range($event->start_number, $event->end_number);
@@ -96,9 +261,9 @@ public function createEvent(DTOsEvent $data): Event
     {
         // Seleccionar un ticket ganador aleatorio
         $winningPurchase = $event->purchases()
-                                 ->where('status', 'completed')
-                                 ->inRandomOrder()
-                                 ->first();
+            ->where('status', 'completed')
+            ->inRandomOrder()
+            ->first();
 
         if ($winningPurchase) {
             // Actualizar el evento con el número ganador
