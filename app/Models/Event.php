@@ -17,7 +17,8 @@ class Event extends Model
         'start_date',
         'end_date',
         'status',
-        'winner_number'
+        'winner_number',
+        'image_url'
     ];
 
     protected $casts = [
@@ -164,5 +165,18 @@ class Event extends Model
         return $this->status === 'active'
             && now()->gte($this->start_date)
             && now()->lte($this->end_date);
+    }
+
+    public function getImageUrlAttribute($value)
+    {
+        return $value ?: null; // Retorna null si no hay imagen
+    }
+
+    /**
+     * Verificar si tiene imagen
+     */
+    public function hasImage(): bool
+    {
+        return !empty($this->image_url);
     }
 }

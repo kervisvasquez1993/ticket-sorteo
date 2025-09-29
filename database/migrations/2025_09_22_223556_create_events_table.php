@@ -18,6 +18,7 @@ return new class extends Migration
             $table->dateTime('end_date');
             $table->enum('status', ['active', 'completed', 'cancelled'])->default('active');
             $table->integer('winner_number')->nullable();
+            $table->string('image_url')->nullable(); // Campo para la URL de la imagen
             $table->timestamps();
         });
     }

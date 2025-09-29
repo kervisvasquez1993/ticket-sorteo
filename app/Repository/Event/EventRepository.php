@@ -21,6 +21,7 @@ class EventRepository implements IEventRepository
             'events.end_date',
             'events.status',
             'events.winner_number',
+            'events.image_url', // Nuevo campo agregado
             'events.created_at',
             'events.updated_at'
         ])
@@ -74,15 +75,9 @@ class EventRepository implements IEventRepository
             ->orderBy('events.created_at', 'desc')
             ->get()
             ->map(function ($event) {
-                // Obtener las últimas 5 compras por separado
-
-
-                // Calcular tickets disponibles
                 $totalTickets = $event->end_number - $event->start_number + 1;
                 $ticketsSold = intval($event->total_tickets_sold ?? 0);
                 $percentageSold = $totalTickets > 0 ? round(($ticketsSold / $totalTickets) * 100, 2) : 0;
-
-                // Agregar estadísticas
                 $event->statistics = [
                     'total_purchases' => $event->total_purchases,
                     'purchases_by_status' => [
@@ -104,8 +99,6 @@ class EventRepository implements IEventRepository
                         'percentage_sold' => $percentageSold
                     ]
                 ];
-
-                // Remover propiedades temporales
                 unset(
                     $event->total_purchases,
                     $event->pending_purchases,
@@ -123,7 +116,6 @@ class EventRepository implements IEventRepository
             });
     }
 
-    // Método alternativo más simple si prefieres menos consultas
     public function getAllEventsSimple()
     {
         return Event::select([
@@ -136,6 +128,7 @@ class EventRepository implements IEventRepository
             'end_date',
             'status',
             'winner_number',
+            'image_url', // Nuevo campo agregado
             'created_at',
             'updated_at'
         ])
