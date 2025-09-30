@@ -97,7 +97,7 @@ class PurchaseController extends Controller
      */
     public function myPurchases()
     {
-        $result = $this->PurchaseServices->getUserPurchases(Auth::id());
+        $result = $this->PurchaseServices->getUserPurchases(Auth::user()->id);
         if (!$result['success']) {
             return response()->json([
                 'error' => $result['message']

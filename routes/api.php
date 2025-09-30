@@ -12,11 +12,18 @@ Route::post('/register', [AuthController::class, 'register'])->name('register');
 
 Route::middleware('auth:api')->group(function () {
 
-    Route::apiResource('purchases', PurchaseController::class);
-    Route::get('purchases/transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
-    Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
-    Route::patch('purchases/{transactionId}/approve', [PurchaseController::class, 'approve']);
-    Route::patch('purchases/{transactionId}/reject', [PurchaseController::class, 'reject']);
+    Route::prefix('purchases')->group(function () {
+        // Rutas específicas
+        Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
+        Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
+        Route::patch('{transactionId}/approve', [PurchaseController::class, 'approve']);
+        Route::patch('{transactionId}/reject', [PurchaseController::class, 'reject']);
+
+    });
+
+    Route::post('purchases', [PurchaseController::class, 'store']);
+    Route::get('purchases', [PurchaseController::class, 'index']);
+
 
 
     Route::prefix('payment-methods')->group(function () {
