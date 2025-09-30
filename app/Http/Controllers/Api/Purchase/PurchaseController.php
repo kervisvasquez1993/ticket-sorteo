@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
 use App\Interfaces\Purchase\IPurchaseServices;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class PurchaseController extends Controller
@@ -124,5 +125,41 @@ class PurchaseController extends Controller
             ], 422);
         }
         return response()->json($result['data'], 200);
+    }
+    public function approve(string $transactionId)
+    {
+        $result = $this->PurchaseServices->approvePurchase($transactionId);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
+    }
+
+    /**
+     * Rechazar una orden de compra por transaction_id
+     */
+    public function reject(string $transactionId, Request $request)
+    {
+        $reason = $request->input('reason', null);
+
+        $result = $this->PurchaseServices->rejectPurchase($transactionId, $reason);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
     }
 }

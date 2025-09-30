@@ -253,39 +253,94 @@ class PurchaseServices implements IPurchaseServices
             DB::beginTransaction();
 
             // Obtener todas las compras de esta transacción
-            $purchases = Purchase::where('transaction_id', $transactionId)
-                ->where('status', 'pending')
-                ->get();
+            $purchases = Purchase::where('transaction_id', $transactionId)->get();
 
             if ($purchases->isEmpty()) {
+                throw new Exception('No se encontraron compras con este transaction_id');
+            }
+
+            // Verificar si ya fue aprobada
+            $firstPurchase = $purchases->first();
+            if (in_array($firstPurchase->status, ['completed', 'processing'])) {
+                return [
+                    'success' => false,
+                    'message' => 'Esta transacción ya fue aprobada anteriormente.',
+                    'data' => [
+                        'transaction_id' => $transactionId,
+                        'status' => $firstPurchase->status
+                    ]
+                ];
+            }
+
+            // Verificar que todas estén en pending
+            $pendingPurchases = $purchases->where('status', 'pending');
+            if ($pendingPurchases->isEmpty()) {
                 throw new Exception('No se encontraron compras pendientes con este transaction_id');
             }
 
-            $event = Event::findOrFail($purchases->first()->event_id);
+            $event = Event::findOrFail($firstPurchase->event_id);
 
-            // Cambiar status a 'processing'
-            foreach ($purchases as $purchase) {
-                $purchase->update(['status' => 'processing']);
+            // Obtener números ya usados
+            $usedNumbers = Purchase::where('event_id', $event->id)
+                ->whereNotNull('ticket_number')
+                ->pluck('ticket_number')
+                ->toArray();
+
+            // Crear rango completo de números disponibles
+            $allNumbers = range($event->start_number, $event->end_number);
+            $availableNumbers = array_diff($allNumbers, $usedNumbers);
+
+            // Verificar disponibilidad
+            if (count($availableNumbers) < $pendingPurchases->count()) {
+                throw new Exception('No hay suficientes números disponibles para esta transacción.');
             }
 
-            // AHORA SÍ asignar números
-            foreach ($purchases as $purchase) {
-                AssignTicketNumberJob::dispatch($purchase->id, null);
+            // Asignar números de forma síncrona
+            $assignedNumbers = [];
+            foreach ($pendingPurchases as $purchase) {
+                if (empty($availableNumbers)) {
+                    throw new Exception('Se agotaron los números disponibles durante la asignación.');
+                }
+
+                // Seleccionar número aleatorio
+                $availableNumbersArray = array_values($availableNumbers);
+                $randomIndex = array_rand($availableNumbersArray);
+                $assignedNumber = $availableNumbersArray[$randomIndex];
+
+                // Asignar número y cambiar status a completed
+                $purchase->update([
+                    'ticket_number' => $assignedNumber,
+                    'status' => 'completed'
+                ]);
+
+                $assignedNumbers[] = $assignedNumber;
+
+                // Remover el número asignado de los disponibles
+                $availableNumbers = array_diff($availableNumbers, [$assignedNumber]);
+
+                Log::info("Ticket number {$assignedNumber} assigned to purchase {$purchase->id}");
             }
 
             DB::commit();
 
             return [
                 'success' => true,
-                'message' => 'Pago aprobado. Los números se están asignando.',
+                'message' => 'Pago aprobado y números asignados exitosamente.',
                 'data' => [
                     'transaction_id' => $transactionId,
-                    'purchases_count' => $purchases->count(),
+                    'purchases_count' => $pendingPurchases->count(),
+                    'assigned_numbers' => $assignedNumbers,
+                    'status' => 'completed'
                 ]
             ];
         } catch (Exception $exception) {
             DB::rollBack();
             Log::error('Error approving purchase: ' . $exception->getMessage());
+
+            // Actualizar compras a failed si hubo error
+            Purchase::where('transaction_id', $transactionId)
+                ->where('status', 'processing')
+                ->update(['status' => 'failed']);
 
             return [
                 'success' => false,
@@ -294,12 +349,11 @@ class PurchaseServices implements IPurchaseServices
         }
     }
 
-    public function rejectPurchase(string $transactionId, string $reason = null): array
+    public function rejectPurchase(string $transactionId, string|null $reason = null): array
     {
         try {
             DB::beginTransaction();
 
-            // Obtener todas las compras de esta transacción
             $purchases = Purchase::where('transaction_id', $transactionId)
                 ->where('status', 'pending')
                 ->get();
@@ -307,12 +361,9 @@ class PurchaseServices implements IPurchaseServices
             if ($purchases->isEmpty()) {
                 throw new Exception('No se encontraron compras pendientes con este transaction_id');
             }
-
-            // Cambiar status a 'failed' o 'rejected'
             foreach ($purchases as $purchase) {
                 $purchase->update([
                     'status' => 'failed',
-                    // Podrías agregar un campo 'rejection_reason' si quieres
                 ]);
             }
 

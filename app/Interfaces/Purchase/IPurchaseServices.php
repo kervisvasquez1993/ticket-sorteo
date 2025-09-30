@@ -14,4 +14,7 @@ interface IPurchaseServices
     public function getUserPurchases($userId);
     public function getPurchaseSummary($transactionId);
     public function getPurchaseByTransaction(string $transactionId);
+    public function approvePurchase(string $transactionId);
+    public function rejectPurchase(string $transactionId);
+
 }

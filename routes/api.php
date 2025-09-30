@@ -15,6 +15,8 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('purchases', PurchaseController::class);
     Route::get('purchases/transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
     Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
+    Route::patch('purchases/{transactionId}/approve', [PurchaseController::class, 'approve']);
+    Route::patch('purchases/{transactionId}/reject', [PurchaseController::class, 'reject']);
 
 
     Route::prefix('payment-methods')->group(function () {
