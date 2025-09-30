@@ -191,15 +191,42 @@ class EventRepository implements IEventRepository
     public function getEventWithParticipants($id): Event
     {
         $event = Event::with([
+            // Purchases con toda la información relacionada
             'purchases' => function ($query) {
                 $query->where('status', 'completed')
                     ->orderBy('created_at', 'desc');
             },
-            'purchases.user'
-        ])->findOrFail($id);
+            'purchases.user:id,name,email,role', // Solo campos necesarios del usuario
+            'purchases.eventPrice:id,event_id,amount,currency,is_default',
+            'purchases.paymentMethod:id,name,type', // Asumiendo que tienes estos campos
+
+            // Precios del evento
+            'prices' => function ($query) {
+                $query->where('is_active', true);
+            },
+            'defaultPrice',
+
+            // Participantes únicos (si necesitas listarlos aparte)
+            'participants' => function ($query) {
+                $query->select('users.id', 'users.name', 'users.email')
+                    ->distinct();
+            }
+        ])
+            ->withCount([
+                'purchases as total_purchases' => function ($query) {
+                    $query->where('status', 'completed');
+                },
+                'purchases as pending_purchases' => function ($query) {
+                    $query->where('status', 'pending');
+                }
+            ])
+            ->findOrFail($id);
 
         return $event;
     }
+
+
+
 
     public function createEvent(DTOsEvent $data): Event
     {

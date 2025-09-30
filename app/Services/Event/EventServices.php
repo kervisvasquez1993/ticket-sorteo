@@ -68,33 +68,94 @@ class EventServices implements IEventServices
     {
         try {
             $event = $this->eventRepository->getEventWithParticipants($id);
+            $statistics = $event->getStatistics();
 
-            // Calcular estadísticas
-            $totalSold = $event->purchases->where('status', 'completed')->count();
-            $totalRevenue = $event->purchases->where('status', 'completed')->sum('amount');
-            $totalNumbers = ($event->end_number - $event->start_number) + 1;
-            $availableCount = $totalNumbers - $totalSold;
+            // Información adicional de participantes
+            $participantsDetails = $event->purchases
+                ->groupBy('user_id')
+                ->map(function ($userPurchases) {
+                    $user = $userPurchases->first()->user;
+                    return [
+                        'user_id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'total_tickets' => $userPurchases->count(),
+                        'total_spent' => $userPurchases->sum('amount'),
+                        'ticket_numbers' => $userPurchases->pluck('ticket_number')->toArray(),
+                        'purchase_dates' => $userPurchases->pluck('created_at')->toArray(),
+                        'currencies_used' => $userPurchases->pluck('currency')->unique()->toArray(),
+                    ];
+                })->values();
+
+            // Análisis por moneda
+            $revenueByurrency = $event->purchases
+                ->where('status', 'completed')
+                ->groupBy('currency')
+                ->map(function ($purchases, $currency) {
+                    return [
+                        'currency' => $currency,
+                        'total_amount' => $purchases->sum('amount'),
+                        'count' => $purchases->count(),
+                    ];
+                })->values();
+
+            // Números más vendidos (si quieres ver patrones)
+            $ticketNumbersFrequency = $event->purchases
+                ->where('status', 'completed')
+                ->whereNotNull('ticket_number')
+                ->pluck('ticket_number')
+                ->countBy()
+                ->sortDesc()
+                ->take(10);
 
             return [
                 'success' => true,
                 'data' => [
-                    'event' => $event,
-                    'statistics' => [
-                        'total_numbers' => $totalNumbers,
-                        'sold_numbers' => $totalSold,
-                        'available_numbers' => $availableCount,
-                        'total_revenue' => $totalRevenue,
-                        'participants_count' => $event->purchases->unique('user_id')->count()
-                    ]
+                    'event' => [
+                        'id' => $event->id,
+                        'name' => $event->name,
+                        'description' => $event->description,
+                        'start_number' => $event->start_number,
+                        'end_number' => $event->end_number,
+                        'start_date' => $event->start_date,
+                        'end_date' => $event->end_date,
+                        'status' => $event->status,
+                        'winner_number' => $event->winner_number,
+                        'image_url' => $event->image_url,
+                        'is_active' => $event->isActive(),
+                        'has_image' => $event->hasImage(),
+                        'created_at' => $event->created_at,
+                        'updated_at' => $event->updated_at,
+                    ],
+                    'statistics' => $statistics,
+                    'participants' => $participantsDetails,
+                    'revenue_by_currency' => $revenueByurrency,
+                    'prices' => [
+                        'all_prices' => $event->prices,
+                        'default_price' => $event->defaultPrice,
+                    ],
+                    'purchases' => [
+                        'completed' => $event->purchases->where('status', 'completed')->values(),
+                        'pending' => $event->purchases->where('status', 'pending')->values(),
+                        'total_count' => $event->total_purchases,
+                        'pending_count' => $event->pending_purchases,
+                    ],
+                    'ticket_analysis' => [
+                        'available_numbers' => $event->getAvailableNumbersCount(),
+                        'top_purchased_numbers' => $ticketNumbersFrequency,
+                    ],
                 ]
             ];
         } catch (Exception $exception) {
+            Log::error('Error getting event with participants: ' . $exception->getMessage());
             return [
                 'success' => false,
-                'message' => $exception->getMessage()
+                'message' => 'Error al obtener el evento: ' . $exception->getMessage()
             ];
         }
     }
+
+
 
     public function createEvent(DTOsEvent $data)
     {

@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Node modules
+node_modules
+
+# Vendor (se instala con composer)
+vendor
+
+# Environment files
+.env
+.env.local
+.env.testing
+.env.backup
+
+# Cache y logs
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+
+# Testing
+tests
+phpunit.xml
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+*.md
+
+# Docker
+Dockerfile
+docker-compose.yml
