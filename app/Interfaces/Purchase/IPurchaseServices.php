@@ -13,4 +13,5 @@ interface IPurchaseServices
     public function deletePurchase($id);
     public function getUserPurchases($userId);
     public function getPurchaseSummary($transactionId);
+    public function getPurchaseByTransaction(string $transactionId);
 }

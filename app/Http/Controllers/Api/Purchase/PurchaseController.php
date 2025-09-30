@@ -104,9 +104,20 @@ class PurchaseController extends Controller
         }
         return response()->json($result['data'], 200);
     }
-      public function purchaseSummary($transactionId)
+    public function purchaseSummary($transactionId)
     {
         $result = $this->PurchaseServices->getPurchaseSummary($transactionId);
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+        return response()->json($result['data'], 200);
+    }
+
+    public function showByTransaction(string $transactionId)
+    {
+        $result = $this->PurchaseServices->getPurchaseByTransaction($transactionId);
         if (!$result['success']) {
             return response()->json([
                 'error' => $result['message']

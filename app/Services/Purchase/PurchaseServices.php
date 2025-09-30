@@ -26,19 +26,19 @@ class PurchaseServices implements IPurchaseServices
 
     public function getAllPurchases()
     {
-      try {
-        $results = $this->PurchaseRepository->getGroupedPurchases();
-        return [
-            'success' => true,
-            'data' => $results,
-            'message' => 'Compras agrupadas obtenidas exitosamente'
-        ];
-    } catch (Exception $exception) {
-        return [
-            'success' => false,
-            'message' => $exception->getMessage()
-        ];
-    }
+        try {
+            $results = $this->PurchaseRepository->getGroupedPurchases();
+            return [
+                'success' => true,
+                'data' => $results,
+                'message' => 'Compras agrupadas obtenidas exitosamente'
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
     }
 
     public function getPurchaseById($id)
@@ -347,6 +347,28 @@ class PurchaseServices implements IPurchaseServices
                 'success' => true,
                 'data' => $results,
                 'message' => 'Compras del usuario agrupadas obtenidas exitosamente'
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    public function getPurchaseByTransaction(string $transactionId)
+    {
+        try {
+            $result = $this->PurchaseRepository->getPurchaseByTransaction($transactionId);
+
+            if (!$result) {
+                throw new Exception("No se encontró la transacción {$transactionId}");
+            }
+
+            return [
+                'success' => true,
+                'data' => $result,
+                'message' => 'Transacción obtenida exitosamente'
             ];
         } catch (Exception $exception) {
             return [

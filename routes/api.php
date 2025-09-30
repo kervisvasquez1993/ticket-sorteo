@@ -13,6 +13,7 @@ Route::post('/register', [AuthController::class, 'register'])->name('register');
 Route::middleware('auth:api')->group(function () {
 
     Route::apiResource('purchases', PurchaseController::class);
+    Route::get('purchases/transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
     Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
 
 
