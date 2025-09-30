@@ -1,5 +1,5 @@
 # Usar PHP-FPM en lugar de Apache
-FROM php:8.2-fpm
+FROM php:8.3-fpm
 
 # Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
