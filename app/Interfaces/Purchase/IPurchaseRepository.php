@@ -20,4 +20,5 @@ interface IPurchaseRepository
     public function getGroupedPurchases();
     public function getGroupedUserPurchases($userId);
     public function getPurchaseByTransaction(string $transactionId);
+    public function getGroupedPurchasesByEvent(string $eventId);
 }

@@ -33,6 +33,17 @@ class PurchaseController extends Controller
         return response()->json($result['data'], 200);
     }
 
+    public function getPurchasesByEvent($eventId)
+    {
+        $result = $this->PurchaseServices->getPurchasesByEvent($eventId);
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+        return response()->json($result['data'], 200);
+    }
+
     /**
      * Store a newly created resource in storage.
      */

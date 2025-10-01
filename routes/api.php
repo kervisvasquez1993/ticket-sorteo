@@ -23,6 +23,7 @@ Route::middleware('auth:api')->group(function () {
 
     Route::post('purchases', [PurchaseController::class, 'store']);
     Route::get('purchases', [PurchaseController::class, 'index']);
+    Route::get('purchases/event/{eventId}', [PurchaseController::class, 'getPurchasesByEvent']);
 
 
 

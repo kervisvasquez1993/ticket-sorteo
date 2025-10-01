@@ -428,4 +428,35 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
+    public function getPurchasesByEvent(string $eventId)
+    {
+        try {
+            // Validar que el evento existe
+            $event = Event::find($eventId);
+            if (!$event) {
+                throw new Exception("Evento no encontrado");
+            }
+
+            $results = $this->PurchaseRepository->getGroupedPurchasesByEvent($eventId);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'event' => [
+                        'id' => $event->id,
+                        'name' => $event->name,
+                        'status' => $event->status,
+                    ],
+                    'statistics' => $event->getStatistics(),
+                    'purchases' => $results
+                ],
+                'message' => 'Compras del evento obtenidas exitosamente'
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
 }
