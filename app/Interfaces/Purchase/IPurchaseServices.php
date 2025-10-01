@@ -3,10 +3,11 @@
 namespace App\Interfaces\Purchase;
 
 use App\DTOs\Purchase\DTOsPurchase;
+use App\DTOs\Purchase\DTOsPurchaseFilter;
 
 interface IPurchaseServices
 {
-    public function getAllPurchases();
+    public function getAllPurchases(?DTOsPurchaseFilter $filters = null);
     public function getPurchaseById($id);
     public function createPurchase(DTOsPurchase $data);
     public function updatePurchase(DTOsPurchase $data, $id);

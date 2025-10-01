@@ -3,6 +3,7 @@
 namespace App\Services\Purchase;
 
 use App\DTOs\Purchase\DTOsPurchase;
+use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Interfaces\Purchase\IPurchaseServices;
 use App\Interfaces\Purchase\IPurchaseRepository;
 use App\Jobs\AssignTicketNumberJob;
@@ -24,10 +25,11 @@ class PurchaseServices implements IPurchaseServices
         $this->PurchaseRepository = $PurchaseRepositoryInterface;
     }
 
-    public function getAllPurchases()
+    public function getAllPurchases(?DTOsPurchaseFilter $filters = null)
     {
         try {
-            $results = $this->PurchaseRepository->getGroupedPurchases();
+            $results = $this->PurchaseRepository->getGroupedPurchases($filters);
+
             return [
                 'success' => true,
                 'data' => $results,

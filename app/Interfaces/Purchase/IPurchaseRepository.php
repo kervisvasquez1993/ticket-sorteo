@@ -3,6 +3,7 @@
 namespace App\Interfaces\Purchase;
 
 use App\DTOs\Purchase\DTOsPurchase;
+use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Models\Purchase;
 
 interface IPurchaseRepository
@@ -17,7 +18,7 @@ interface IPurchaseRepository
     public function isNumberAvailable($eventId, $ticketNumber): bool;
     public function createPurchase(DTOsPurchase $data, $amount, $transactionId = null): Purchase;
     public function getPurchasesByTransaction($transactionId);
-    public function getGroupedPurchases();
+    public function getGroupedPurchases(?DTOsPurchaseFilter $filters = null);
     public function getGroupedUserPurchases($userId);
     public function getPurchaseByTransaction(string $transactionId);
     public function getGroupedPurchasesByEvent(string $eventId);
