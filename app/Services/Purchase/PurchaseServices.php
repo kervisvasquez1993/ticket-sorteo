@@ -93,6 +93,8 @@ class PurchaseServices implements IPurchaseServices
                     event_price_id: $data->getEventPriceId(),
                     payment_method_id: $data->getPaymentMethodId(),
                     quantity: 1,
+                    email: $data->getEmail(),           // ✅ Agregar
+                    whatsapp: $data->getWhatsapp(),     // ✅ Agregar
                     currency: $data->getCurrency(),
                     user_id: $data->getUserId(),
                     specific_numbers: null,

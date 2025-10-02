@@ -10,7 +10,14 @@ return new class extends Migration
     {
         Schema::create('purchases', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+
+            // ✅ user_id ahora es nullable y sin cascade delete
+            $table->foreignId('user_id')->nullable()->constrained()->onDelete('set null');
+
+            // ✅ Campos obligatorios para identificar al comprador
+            $table->string('email');
+            $table->string('whatsapp', 20);
+
             $table->foreignId('event_id')->constrained()->onDelete('cascade');
             $table->foreignId('event_price_id')->constrained()->onDelete('cascade');
             $table->foreignId('payment_method_id')->constrained()->onDelete('cascade');
@@ -21,20 +28,22 @@ return new class extends Migration
             $table->enum('status', ['processing', 'pending', 'completed', 'failed', 'refunded'])->default('pending');
             $table->string('transaction_id')->nullable();
 
-            // Nuevos campos para comprobante
-            $table->string('payment_reference')->nullable(); // Referencia del pago (número de transferencia, etc)
-            $table->text('payment_proof_url')->nullable(); // URL del comprobante en S3
-            $table->string('qr_code_url')->nullable(); // ✅ URL del código QR de la compra
-            $table->integer('quantity')->default(1); // Cantidad de tickets en esta compra
-            $table->decimal('total_amount', 10, 2)->nullable(); // Total de la compra
+            // Campos para comprobante
+            $table->string('payment_reference')->nullable();
+            $table->text('payment_proof_url')->nullable();
+            $table->string('qr_code_url')->nullable();
+            $table->integer('quantity')->default(1);
+            $table->decimal('total_amount', 10, 2)->nullable();
 
             $table->timestamps();
 
-            // Constraints
+            // Constraints e índices
             $table->unique(['event_id', 'ticket_number']);
             $table->index(['event_id', 'status']);
             $table->index('user_id');
             $table->index('transaction_id');
+            $table->index('email');      // ✅ Índice para búsquedas por email
+            $table->index('whatsapp');   // ✅ Índice para búsquedas por whatsapp
         });
     }
 

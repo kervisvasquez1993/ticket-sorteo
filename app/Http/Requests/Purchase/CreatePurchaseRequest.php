@@ -12,7 +12,7 @@ class CreatePurchaseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return Auth::check();
+        return true;
     }
 
     public function rules(): array
@@ -96,7 +96,19 @@ class CreatePurchaseRequest extends FormRequest
                 'required',
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
-                'max:5120', // 5MB
+                'max:5120',
+            ],
+            // ✅ Nuevas validaciones
+            'email' => [
+                'required',
+                'email:rfc,dns',
+                'max:255',
+            ],
+            'whatsapp' => [
+                'required',
+                'string',
+                'regex:/^\+?[1-9]\d{1,14}$/', // Formato E.164 internacional
+                'max:20',
             ],
         ];
     }
@@ -115,6 +127,13 @@ class CreatePurchaseRequest extends FormRequest
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
+            // ✅ Nuevos mensajes
+            'email.required' => 'El correo electrónico es obligatorio.',
+            'email.email' => 'El correo electrónico debe ser válido.',
+            'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
+            'whatsapp.required' => 'El número de WhatsApp es obligatorio.',
+            'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
+            'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
         ];
     }
 

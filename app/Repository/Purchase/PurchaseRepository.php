@@ -34,6 +34,8 @@ class PurchaseRepository implements IPurchaseRepository
     {
         $purchaseData = [
             'user_id' => $data->getUserId(),
+            'email' => $data->getEmail(),
+            'whatsapp' => $data->getWhatsapp(),
             'event_id' => $data->getEventId(),
             'event_price_id' => $data->getEventPriceId(),
             'payment_method_id' => $data->getPaymentMethodId(),
@@ -63,9 +65,6 @@ class PurchaseRepository implements IPurchaseRepository
         return $Purchase;
     }
 
-    /**
-     * Obtener compras de un usuario específico
-     */
     public function getUserPurchases($userId)
     {
         return Purchase::with(['event', 'eventPrice', 'paymentMethod'])
@@ -74,9 +73,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->get();
     }
 
-    /**
-     * Obtener compras por evento
-     */
     public function getPurchasesByEvent($eventId)
     {
         return Purchase::with(['user', 'eventPrice', 'paymentMethod'])
@@ -85,9 +81,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->get();
     }
 
-    /**
-     * Verificar si un número está disponible
-     */
     public function isNumberAvailable($eventId, $ticketNumber): bool
     {
         return !Purchase::where('event_id', $eventId)
@@ -101,82 +94,11 @@ class PurchaseRepository implements IPurchaseRepository
             ->where('transaction_id', $transactionId)
             ->get();
     }
-    // public function getGroupedPurchases()
-    // {
-    //     return Purchase::select(
-    //         'transaction_id',
-    //         DB::raw('MIN(id) as first_purchase_id'),
-    //         DB::raw('MIN(created_at) as created_at'),
-    //         DB::raw('COUNT(*) as quantity'),
-    //         DB::raw('SUM(amount) as total_amount'),
-    //         'currency',
-    //         'status',
-    //         'event_id',
-    //         'payment_method_id',
-    //         'payment_reference',
-    //         'payment_proof_url',
-    //         'user_id'
-    //     )
-    //         ->with([
-    //             'event:id,name',
-    //             'paymentMethod:id,name',
-    //             'user:id,name,email'
-    //         ])
-    //         ->groupBy(
-    //             'transaction_id',
-    //             'currency',
-    //             'status',
-    //             'event_id',
-    //             'payment_method_id',
-    //             'payment_reference',
-    //             'payment_proof_url',
-    //             'user_id'
-    //         )
-    //         ->orderBy('created_at', 'desc')
-    //         ->get()
-    //         ->map(function ($group) {
-    //             // Obtener los IDs de todas las compras del grupo
-    //             $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
-    //                 ->pluck('id')
-    //                 ->toArray();
 
-    //             // Obtener los números de ticket asignados
-    //             $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
-    //                 ->whereNotNull('ticket_number')
-    //                 ->pluck('ticket_number')
-    //                 ->toArray();
-
-    //             return [
-    //                 'transaction_id' => $group->transaction_id,
-    //                 'event' => [
-    //                     'id' => $group->event->id,
-    //                     'name' => $group->event->name
-    //                 ],
-    //                 'user' => [
-    //                     'id' => $group->user->id,
-    //                     'name' => $group->user->name,
-    //                     'email' => $group->user->email
-    //                 ],
-    //                 'quantity' => $group->quantity,
-    //                 'unit_price' => number_format($group->total_amount / $group->quantity, 2),
-    //                 'total_amount' => number_format($group->total_amount, 2),
-    //                 'currency' => $group->currency,
-    //                 'payment_method' => $group->paymentMethod->name ?? 'N/A',
-    //                 'payment_reference' => $group->payment_reference,
-    //                 'payment_proof' => $group->payment_proof_url,
-    //                 'status' => $group->status,
-    //                 'ticket_numbers' => empty($ticketNumbers) ?
-    //                     'Pendiente de asignación' : $ticketNumbers,
-    //                 'purchase_ids' => $purchaseIds,
-    //                 'created_at' => $group->created_at->toDateTimeString()
-    //             ];
-    //         });
-    // }
     public function getGroupedPurchases(?DTOsPurchaseFilter $filters = null)
     {
         $query = Purchase::query();
 
-        // Aplicar filtros
         if ($filters) {
             $this->applyFilters($query, $filters);
         }
@@ -193,7 +115,9 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_method_id',
             'payment_reference',
             'payment_proof_url',
-            'user_id'
+            'user_id',
+            DB::raw('MAX(email) as email'),        // ✅ Agregar email
+            DB::raw('MAX(whatsapp) as whatsapp')   // ✅ Agregar whatsapp
         )
             ->with([
                 'event:id,name',
@@ -211,7 +135,6 @@ class PurchaseRepository implements IPurchaseRepository
                 'user_id'
             );
 
-        // Aplicar ordenamiento
         if ($filters && $filters->isValidSortField() && $filters->isValidSortOrder()) {
             $sortBy = $filters->getSortBy();
             $sortOrder = $filters->getSortOrder();
@@ -229,7 +152,6 @@ class PurchaseRepository implements IPurchaseRepository
             $query->orderBy('created_at', 'desc');
         }
 
-        // Paginación
         $perPage = $filters ? $filters->getPerPage() : 15;
         $page = $filters ? $filters->getPage() : 1;
 
@@ -246,17 +168,25 @@ class PurchaseRepository implements IPurchaseRepository
                     ->pluck('ticket_number')
                     ->toArray();
 
+                // ✅ Manejar user null para compras de invitados
+                $userData = null;
+                if ($group->user) {
+                    $userData = [
+                        'id' => $group->user->id,
+                        'name' => $group->user->name,
+                        'email' => $group->user->email
+                    ];
+                }
+
                 return [
                     'transaction_id' => $group->transaction_id,
                     'event' => [
                         'id' => $group->event->id,
                         'name' => $group->event->name
                     ],
-                    'user' => [
-                        'id' => $group->user->id,
-                        'name' => $group->user->name,
-                        'email' => $group->user->email
-                    ],
+                    'user' => $userData,
+                    'email' => $group->email,           // ✅ Email del comprador
+                    'whatsapp' => $group->whatsapp,     // ✅ WhatsApp del comprador
                     'quantity' => $group->quantity,
                     'unit_price' => number_format($group->total_amount / $group->quantity, 2),
                     'total_amount' => number_format($group->total_amount, 2),
@@ -284,37 +214,30 @@ class PurchaseRepository implements IPurchaseRepository
 
     private function applyFilters($query, DTOsPurchaseFilter $filters)
     {
-        // Filtro por usuario
         if ($filters->getUserId()) {
             $query->where('user_id', $filters->getUserId());
         }
 
-        // Filtro por evento
         if ($filters->getEventId()) {
             $query->where('event_id', $filters->getEventId());
         }
 
-        // Filtro por estado
         if ($filters->getStatus() && $filters->isValidStatus()) {
             $query->where('status', $filters->getStatus());
         }
 
-        // Filtro por moneda
         if ($filters->getCurrency() && $filters->isValidCurrency()) {
             $query->where('currency', $filters->getCurrency());
         }
 
-        // Filtro por método de pago
         if ($filters->getPaymentMethodId()) {
             $query->where('payment_method_id', $filters->getPaymentMethodId());
         }
 
-        // Filtro por transaction_id
         if ($filters->getTransactionId()) {
             $query->where('transaction_id', 'LIKE', '%' . $filters->getTransactionId() . '%');
         }
 
-        // Filtro por rango de fechas
         if ($filters->getDateFrom()) {
             $query->whereDate('created_at', '>=', $filters->getDateFrom());
         }
@@ -323,12 +246,14 @@ class PurchaseRepository implements IPurchaseRepository
             $query->whereDate('created_at', '<=', $filters->getDateTo());
         }
 
-        // Búsqueda general (en payment_reference o transaction_id)
+        // ✅ Búsqueda mejorada incluyendo email y whatsapp
         if ($filters->getSearch()) {
             $search = $filters->getSearch();
             $query->where(function ($q) use ($search) {
                 $q->where('transaction_id', 'LIKE', '%' . $search . '%')
                     ->orWhere('payment_reference', 'LIKE', '%' . $search . '%')
+                    ->orWhere('email', 'LIKE', '%' . $search . '%')
+                    ->orWhere('whatsapp', 'LIKE', '%' . $search . '%')
                     ->orWhereHas('user', function ($userQuery) use ($search) {
                         $userQuery->where('name', 'LIKE', '%' . $search . '%')
                             ->orWhere('email', 'LIKE', '%' . $search . '%');
@@ -340,9 +265,6 @@ class PurchaseRepository implements IPurchaseRepository
         }
     }
 
-    /**
-     * Obtener compras agrupadas del usuario
-     */
     public function getGroupedUserPurchases($userId)
     {
         return Purchase::select(
@@ -356,7 +278,9 @@ class PurchaseRepository implements IPurchaseRepository
             'event_id',
             'payment_method_id',
             'payment_reference',
-            'payment_proof_url'
+            'payment_proof_url',
+            DB::raw('MAX(email) as email'),
+            DB::raw('MAX(whatsapp) as whatsapp')
         )
             ->where('user_id', $userId)
             ->with([
@@ -390,6 +314,8 @@ class PurchaseRepository implements IPurchaseRepository
                         'id' => $group->event->id,
                         'name' => $group->event->name
                     ],
+                    'email' => $group->email,
+                    'whatsapp' => $group->whatsapp,
                     'quantity' => $group->quantity,
                     'unit_price' => number_format($group->total_amount / $group->quantity, 2),
                     'total_amount' => number_format($group->total_amount, 2),
@@ -420,7 +346,10 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_method_id',
             'payment_reference',
             'payment_proof_url',
-            'user_id'
+            'user_id',
+            DB::raw('MAX(email) as email'),
+            DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(qr_code_url) as qr_code_url')  // ✅ Agregar QR
         )
             ->where('transaction_id', $transactionId)
             ->with([
@@ -444,16 +373,24 @@ class PurchaseRepository implements IPurchaseRepository
             return null;
         }
 
-        // Obtener los IDs de todas las compras del grupo
         $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
             ->pluck('id')
             ->toArray();
 
-        // Obtener los números de ticket asignados
         $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
             ->whereNotNull('ticket_number')
             ->pluck('ticket_number')
             ->toArray();
+
+        // ✅ Manejar user null
+        $userData = null;
+        if ($group->user) {
+            $userData = [
+                'id' => $group->user->id,
+                'name' => $group->user->name,
+                'email' => $group->user->email
+            ];
+        }
 
         return [
             'transaction_id' => $group->transaction_id,
@@ -461,11 +398,9 @@ class PurchaseRepository implements IPurchaseRepository
                 'id' => $group->event->id,
                 'name' => $group->event->name
             ],
-            'user' => [
-                'id' => $group->user->id,
-                'name' => $group->user->name,
-                'email' => $group->user->email
-            ],
+            'user' => $userData,
+            'email' => $group->email,
+            'whatsapp' => $group->whatsapp,
             'quantity' => $group->quantity,
             'unit_price' => number_format($group->total_amount / $group->quantity, 2),
             'total_amount' => number_format($group->total_amount, 2),
@@ -473,6 +408,7 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_method' => $group->paymentMethod->name ?? 'N/A',
             'payment_reference' => $group->payment_reference,
             'payment_proof' => $group->payment_proof_url,
+            'qr_code_url' => $group->qr_code_url,  // ✅ Incluir QR
             'status' => $group->status,
             'ticket_numbers' => empty($ticketNumbers) ?
                 'Pendiente de asignación' : $ticketNumbers,
@@ -480,6 +416,7 @@ class PurchaseRepository implements IPurchaseRepository
             'created_at' => $group->created_at->toDateTimeString()
         ];
     }
+
     public function getGroupedPurchasesByEvent(string $eventId)
     {
         return Purchase::select(
@@ -494,7 +431,9 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_method_id',
             'payment_reference',
             'payment_proof_url',
-            'user_id'
+            'user_id',
+            DB::raw('MAX(email) as email'),
+            DB::raw('MAX(whatsapp) as whatsapp')
         )
             ->where('event_id', $eventId)
             ->with([
@@ -515,16 +454,24 @@ class PurchaseRepository implements IPurchaseRepository
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($group) {
-                // Obtener los IDs de todas las compras del grupo
                 $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
                     ->pluck('id')
                     ->toArray();
 
-                // Obtener los números de ticket asignados
                 $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
                     ->whereNotNull('ticket_number')
                     ->pluck('ticket_number')
                     ->toArray();
+
+                // ✅ Manejar user null
+                $userData = null;
+                if ($group->user) {
+                    $userData = [
+                        'id' => $group->user->id,
+                        'name' => $group->user->name,
+                        'email' => $group->user->email
+                    ];
+                }
 
                 return [
                     'transaction_id' => $group->transaction_id,
@@ -532,11 +479,9 @@ class PurchaseRepository implements IPurchaseRepository
                         'id' => $group->event->id,
                         'name' => $group->event->name
                     ],
-                    'user' => [
-                        'id' => $group->user->id,
-                        'name' => $group->user->name,
-                        'email' => $group->user->email
-                    ],
+                    'user' => $userData,
+                    'email' => $group->email,
+                    'whatsapp' => $group->whatsapp,
                     'quantity' => $group->quantity,
                     'unit_price' => number_format($group->total_amount / $group->quantity, 2),
                     'total_amount' => number_format($group->total_amount, 2),

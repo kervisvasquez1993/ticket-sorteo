@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/register', [AuthController::class, 'register'])->name('register');
-
+    Route::post('purchases', [PurchaseController::class, 'store']);
+    Route::get('purchases', [PurchaseController::class, 'index']);
 Route::middleware('auth:api')->group(function () {
 
     Route::prefix('purchases')->group(function () {
@@ -22,8 +23,8 @@ Route::middleware('auth:api')->group(function () {
 
     });
 
-    Route::post('purchases', [PurchaseController::class, 'store']);
-    Route::get('purchases', [PurchaseController::class, 'index']);
+    // Route::post('purchases', [PurchaseController::class, 'store']);
+    // Route::get('purchases', [PurchaseController::class, 'index']);
     Route::get('purchases/event/{eventId}', [PurchaseController::class, 'getPurchasesByEvent']);
 
 

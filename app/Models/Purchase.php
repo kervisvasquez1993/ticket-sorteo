@@ -24,6 +24,8 @@ class Purchase extends Model
         'quantity',
         'qr_code_url',
         'total_amount',
+        'email',
+        'whatsapp',
     ];
 
     protected $casts = [
