@@ -25,8 +25,8 @@ class CreateEventRequest extends FormRequest
             'end_date' => 'required|date|after:start_date',
             'status' => 'nullable|in:active,completed,cancelled',
 
-            // Validación para imagen (opcional)
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Máximo 2MB
+            // ✅ Imagen ahora es REQUERIDA
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ];
     }
 
@@ -39,6 +39,7 @@ class CreateEventRequest extends FormRequest
             'end_date.after' => 'La fecha de fin debe ser posterior a la fecha de inicio',
 
             // Mensajes para imagen
+            'image.required' => 'La imagen del evento es obligatoria', // ✅ Nuevo mensaje
             'image.image' => 'El archivo debe ser una imagen válida',
             'image.mimes' => 'La imagen debe ser de tipo: jpeg, png, jpg, gif o webp',
             'image.max' => 'La imagen no debe superar los 2MB',

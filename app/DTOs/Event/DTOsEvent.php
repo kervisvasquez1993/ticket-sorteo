@@ -23,6 +23,8 @@ class DTOsEvent
     public static function fromRequest(CreateEventRequest $request): self
     {
         $validated = $request->validated();
+
+        // ✅ Subir imagen y obtener URL
         $imageUrl = self::uploadEventImageToS3($request);
 
         return new self(
@@ -33,14 +35,18 @@ class DTOsEvent
             start_date: $validated['start_date'],
             end_date: $validated['end_date'],
             status: $validated['status'] ?? 'active',
-            image_url: $imageUrl,
+            image_url: $imageUrl, // ✅ Ahora se incluye correctamente
         );
     }
 
-    public static function fromUpdateRequest(UpdateEventRequest $request): self
+    public static function fromUpdateRequest(UpdateEventRequest $request, ?string $currentImageUrl = null): self
     {
         $validated = $request->validated();
-        $imageUrl = self::uploadEventImageToS3($request);
+
+        // ✅ Si hay nueva imagen, subirla; si no, mantener la actual
+        $imageUrl = $request->hasFile('image')
+            ? self::uploadEventImageToS3($request)
+            : $currentImageUrl;
 
         return new self(
             name: $validated['name'],
@@ -59,7 +65,11 @@ class DTOsEvent
      */
     private static function uploadEventImageToS3(CreateEventRequest|UpdateEventRequest $request): ?string
     {
-        if ($request->hasFile('image')) {
+        if (!$request->hasFile('image')) {
+            return null;
+        }
+
+        try {
             $file = $request->file('image');
 
             // Generar nombre único para el archivo
@@ -82,14 +92,22 @@ class DTOsEvent
 
                 return $url;
             }
-        }
 
-        return null;
+            Log::error('Failed to upload event image to S3');
+            return null;
+
+        } catch (\Exception $e) {
+            Log::error('Error uploading event image', [
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
     }
 
     public function toArray(): array
     {
-        return array_filter([
+        // ✅ YA NO filtrar null, incluir todo
+        return [
             'name' => $this->name,
             'description' => $this->description,
             'start_number' => $this->start_number,
@@ -97,8 +115,8 @@ class DTOsEvent
             'start_date' => $this->start_date,
             'end_date' => $this->end_date,
             'status' => $this->status,
-            'image_url' => $this->image_url,
-        ], fn($value) => !is_null($value));
+            'image_url' => $this->image_url, // ✅ Siempre se incluye
+        ];
     }
 
     // Getters
