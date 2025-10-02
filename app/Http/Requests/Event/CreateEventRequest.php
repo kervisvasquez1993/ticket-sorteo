@@ -25,14 +25,8 @@ class CreateEventRequest extends FormRequest
             'end_date' => 'required|date|after:start_date',
             'status' => 'nullable|in:active,completed,cancelled',
 
-            // Validación para imagen (requerida)
-            // 'image_url' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Máximo 2MB
-
-            // Validación para prices
-            'prices' => 'required|array|min:1',
-            'prices.*.amount' => 'required|numeric|min:0',
-            'prices.*.currency' => 'required|string|in:BS,USD',
-            'prices.*.is_default' => 'required|boolean',
+            // Validación para imagen (opcional)
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Máximo 2MB
         ];
     }
 
@@ -45,38 +39,10 @@ class CreateEventRequest extends FormRequest
             'end_date.after' => 'La fecha de fin debe ser posterior a la fecha de inicio',
 
             // Mensajes para imagen
-            'image.required' => 'La imagen del evento es obligatoria',
             'image.image' => 'El archivo debe ser una imagen válida',
             'image.mimes' => 'La imagen debe ser de tipo: jpeg, png, jpg, gif o webp',
             'image.max' => 'La imagen no debe superar los 2MB',
-
-            // Mensajes para prices
-            'prices.required' => 'Debe incluir al menos un precio',
-            'prices.*.amount.required' => 'El monto es obligatorio',
-            'prices.*.amount.min' => 'El monto debe ser mayor o igual a 0',
-            'prices.*.currency.required' => 'La moneda es obligatoria',
-            'prices.*.currency.in' => 'La moneda debe ser BS o USD',
-            'prices.*.is_default.required' => 'Debe especificar si es precio por defecto',
         ];
-    }
-
-    public function withValidator($validator)
-    {
-        $validator->after(function ($validator) {
-            $prices = $this->input('prices', []);
-
-            // Validar que solo haya un precio por defecto
-            $defaultCount = collect($prices)->where('is_default', true)->count();
-            if ($defaultCount !== 1) {
-                $validator->errors()->add('prices', 'Debe haber exactamente un precio marcado como predeterminado');
-            }
-
-            // Validar que no haya monedas duplicadas
-            $currencies = collect($prices)->pluck('currency');
-            if ($currencies->count() !== $currencies->unique()->count()) {
-                $validator->errors()->add('prices', 'No puede haber precios duplicados para la misma moneda');
-            }
-        });
     }
 
     public function failedValidation(Validator $validator)

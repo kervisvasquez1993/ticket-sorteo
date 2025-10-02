@@ -232,18 +232,6 @@ class EventRepository implements IEventRepository
     {
         return DB::transaction(function () use ($data) {
             $event = Event::create($data->toArray());
-
-            // Crear los precios asociados
-            foreach ($data->getPrices() as $priceData) {
-                $event->prices()->create([
-                    'amount' => $priceData['amount'],
-                    'currency' => $priceData['currency'],
-                    'is_default' => $priceData['is_default'],
-                    'is_active' => true
-                ]);
-            }
-            $event->load('prices');
-
             return $event;
         });
     }

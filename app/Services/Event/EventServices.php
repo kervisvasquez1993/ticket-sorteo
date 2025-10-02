@@ -160,7 +160,6 @@ class EventServices implements IEventServices
     public function createEvent(DTOsEvent $data)
     {
         try {
-            // Validar que el rango sea razonable
             $totalNumbers = ($data->getEndNumber() - $data->getStartNumber()) + 1;
             if ($totalNumbers > 100000) {
                 throw new \Exception('El rango de números es demasiado grande (máximo 100,000)');
