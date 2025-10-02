@@ -19,14 +19,17 @@ class Purchase extends Model
         'currency',
         'status',
         'transaction_id',
-        'payment_reference',        // NUEVO
-        'payment_proof_url',        // NUEVO
-        'quantity',                 // NUEVO
+        'payment_reference',
+        'payment_proof_url',
+        'quantity',
+        'qr_code_url',
         'total_amount',
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2'
+        'amount' => 'decimal:2',
+        'total_amount' => 'decimal:2',
+
     ];
 
     public function user()
@@ -47,5 +50,9 @@ class Purchase extends Model
     public function paymentMethod()
     {
         return $this->belongsTo(PaymentMethod::class);
+    }
+    public function hasQRCode(): bool
+    {
+        return !empty($this->qr_code_url);
     }
 }

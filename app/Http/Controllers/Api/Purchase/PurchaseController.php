@@ -55,13 +55,15 @@ class PurchaseController extends Controller
     public function store(CreatePurchaseRequest $request)
     {
         $result = $this->PurchaseServices->createPurchase(DTOsPurchase::fromRequest($request));
+
         if (!$result['success']) {
             return response()->json([
                 'error' => $result['message']
             ], 422);
         }
+
         return response()->json([
-            'message' => $result['message'] ?? 'Compra creada exitosamente',
+            'message' => $result['message'],
             'data' => $result['data']
         ], 201);
     }

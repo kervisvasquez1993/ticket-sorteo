@@ -23,7 +23,8 @@ return new class extends Migration
 
             // Nuevos campos para comprobante
             $table->string('payment_reference')->nullable(); // Referencia del pago (número de transferencia, etc)
-            $table->text('payment_proof_url'); // URL del comprobante en S3
+            $table->text('payment_proof_url')->nullable(); // URL del comprobante en S3
+            $table->string('qr_code_url')->nullable(); // ✅ URL del código QR de la compra
             $table->integer('quantity')->default(1); // Cantidad de tickets en esta compra
             $table->decimal('total_amount', 10, 2)->nullable(); // Total de la compra
 

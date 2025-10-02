@@ -13,6 +13,8 @@ use App\Models\Purchase;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use SimpleSoftwareIO\QrCode\Facades\QrCode as QrCodeGenerator;
 use Illuminate\Support\Str;
 
 
@@ -73,6 +75,7 @@ class PurchaseServices implements IPurchaseServices
             if ($availableCount < $data->getQuantity()) {
                 throw new Exception("Solo quedan {$availableCount} números disponibles.");
             }
+
             // Generar transaction_id único para agrupar las compras
             $transactionId = 'TXN-' . strtoupper(Str::random(12));
 
@@ -81,6 +84,7 @@ class PurchaseServices implements IPurchaseServices
 
             $purchases = [];
             $specificNumbers = $data->getSpecificNumbers();
+
             for ($i = 0; $i < $data->getQuantity(); $i++) {
                 $specificNumber = $specificNumbers[$i] ?? null;
 
@@ -91,7 +95,7 @@ class PurchaseServices implements IPurchaseServices
                     quantity: 1,
                     currency: $data->getCurrency(),
                     user_id: $data->getUserId(),
-                    specific_numbers: null, // NO asignar aún
+                    specific_numbers: null,
                     payment_reference: $data->getPaymentReference(),
                     payment_proof_url: $data->getPaymentProofUrl(),
                     total_amount: $totalAmount
@@ -104,31 +108,26 @@ class PurchaseServices implements IPurchaseServices
                 );
                 $purchases[] = $purchase;
             }
+
+            // ✅ Generar QR Code con la URL del frontend
+            $qrImageUrl = $this->generatePurchaseQRCode($transactionId);
+
+            // ✅ Actualizar el QR code en todas las compras de esta transacción
+            if ($qrImageUrl) {
+                Purchase::where('transaction_id', $transactionId)
+                    ->update(['qr_code_url' => $qrImageUrl]);
+            }
+
             DB::commit();
+
+            // ✅ Retornar respuesta simplificada
             return [
                 'success' => true,
                 'data' => [
                     'transaction_id' => $transactionId,
-                    'summary' => [
-                        'event_id' => $event->id,
-                        'event_name' => $event->name,
-                        'quantity' => $data->getQuantity(),
-                        'unit_price' => number_format($eventPrice->amount, 2),
-                        'total_amount' => number_format($totalAmount, 2),
-                        'currency' => $data->getCurrency(),
-                        'payment_method' => $purchases[0]->paymentMethod->name ?? 'N/A',
-                        'payment_reference' => $data->getPaymentReference(),
-                        'payment_proof' => $data->getPaymentProofUrl(),
-                        'status' => 'pending', // ✅ Cambiar a pending
-                        'created_at' => now()->toDateTimeString(),
-                    ],
-                    'ticket_numbers' => [
-                        'status' => 'Los números se asignarán una vez se verifique el pago',
-                        'requested_numbers' => $specificNumbers ?? 'Aleatorios',
-                    ],
-                    'purchase_ids' => array_column($purchases, 'id'),
+                    'qr_code_url' => $qrImageUrl,
                 ],
-                'message' => 'Compra registrada exitosamente. Estamos verificando tu pago y te notificaremos cuando sea aprobado.'
+                'message' => 'Compra registrada exitosamente. Hemos enviado la información de tu compra a tu correo electrónico.'
             ];
         } catch (Exception $exception) {
             DB::rollBack();
@@ -140,6 +139,77 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
+
+    /**
+     * Generar código QR para la compra y subirlo a S3
+     */
+    private function generatePurchaseQRCode(string $transactionId): ?string
+    {
+        try {
+            // ✅ URL del frontend (configurable en .env)
+            $frontendUrl = config('app.frontend_url', 'https://tu-frontend.com');
+            $purchaseUrl = "{$frontendUrl}/purchase/{$transactionId}";
+
+            // ✅ Crear datos para el QR
+            $qrData = json_encode([
+                'type' => 'purchase_receipt',
+                'transaction_id' => $transactionId,
+                'url' => $purchaseUrl,
+                'timestamp' => now()->toISOString(),
+                'version' => '1.0',
+            ]);
+
+            // ✅ Generar la imagen QR
+            $qrImage = QrCodeGenerator::format('png')
+                ->size(400)
+                ->margin(2)
+                ->errorCorrection('H') // Alta corrección de errores
+                ->generate($purchaseUrl); // Usar directamente la URL
+
+            // ✅ Crear nombre único para el archivo
+            $fileName = 'purchase-qr/' . $transactionId . '_' . time() . '.png';
+
+            // ✅ Subir a S3
+            $uploaded = Storage::disk('s3')->put($fileName, $qrImage, [
+                'visibility' => 'public',
+                'ContentType' => 'image/png'
+            ]);
+
+            if ($uploaded) {
+                // Retornar la URL completa
+                $url = "https://backend-imagen-br.s3.us-east-2.amazonaws.com/" . $fileName;
+
+                Log::info('Purchase QR Code generated successfully', [
+                    'transaction_id' => $transactionId,
+                    'file_name' => $fileName,
+                    'url' => $url,
+                    'purchase_url' => $purchaseUrl
+                ]);
+
+                return $url;
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Error generating purchase QR code', [
+                'transaction_id' => $transactionId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return null;
+        }
+    }
+
+    // private function getAvailableNumbersCount(Event $event): int
+    // {
+    //     $totalNumbers = ($event->end_number - $event->start_number) + 1;
+    //     $usedNumbers = Purchase::where('event_id', $event->id)
+    //         ->whereNotNull('ticket_number')
+    //         ->count();
+
+    //     return $totalNumbers - $usedNumbers;
+    // }
 
     public function updatePurchase(DTOsPurchase $data, $id)
     {

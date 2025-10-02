@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Event\EventController;
+use App\Http\Controllers\Api\EventPrice\EventPriceController;
 use App\Http\Controllers\Api\PaymentMethod\PaymentMethodController;
 use App\Http\Controllers\Api\Purchase\PurchaseController;
 use App\Http\Controllers\Auth\AuthController;
@@ -47,6 +48,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/events/{id}/available-numbers', [EventController::class, 'availableNumbers']);
         Route::get('/events', [EventController::class, 'index']);
         Route::post('/events', [EventController::class, 'store']);
+        Route::post('/events-prices', [EventPriceController::class, 'store']);
         Route::get('/events/active', [EventController::class, 'active']);
         Route::get('/events/{id}', [EventController::class, 'show']);
         Route::put('/events/{id}', [EventController::class, 'update']);
