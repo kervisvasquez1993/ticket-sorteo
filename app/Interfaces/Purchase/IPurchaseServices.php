@@ -17,6 +17,6 @@ interface IPurchaseServices
     public function getPurchaseByTransaction(string $transactionId);
     public function approvePurchase(string $transactionId);
     public function rejectPurchase(string $transactionId);
-     public function getPurchasesByEvent(string $eventId);
-
+    public function getPurchasesByEvent(string $eventId);
+    public function createSinglePurchase(DTOsPurchase $data);
 }

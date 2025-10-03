@@ -6,6 +6,7 @@ use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
+use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
 use App\Interfaces\Purchase\IPurchaseServices;
 use Illuminate\Http\Request;
@@ -179,5 +180,22 @@ class PurchaseController extends Controller
             'message' => $result['message'],
             'data' => $result['data']
         ], 200);
+    }
+    public function storeSingle(CreateSinglePurchaseRequest $request)
+    {
+        $result = $this->PurchaseServices->createSinglePurchase(
+            DTOsPurchase::fromSinglePurchaseRequest($request)
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 201);
     }
 }

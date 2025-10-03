@@ -422,6 +422,41 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
+    public function approveSinglePurchase(string $transactionId): array
+    {
+        try {
+            DB::beginTransaction();
+
+            $purchases = Purchase::where('transaction_id', $transactionId)
+                ->where('status', 'pending')
+                ->whereNotNull('ticket_number')
+                ->get();
+
+            if ($purchases->isEmpty()) {
+                throw new Exception('No se encontraron compras individuales pendientes');
+            }
+
+            foreach ($purchases as $purchase) {
+                $purchase->update(['status' => 'completed']);
+            }
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'message' => 'Compra(s) aprobada(s) exitosamente.',
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'quantity' => $purchases->count(),
+                    'ticket_numbers' => $purchases->pluck('ticket_number')->toArray(),
+                    'status' => 'completed'
+                ]
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+            return ['success' => false, 'message' => $exception->getMessage()];
+        }
+    }
 
     public function rejectPurchase(string $transactionId, string|null $reason = null): array
     {
@@ -527,6 +562,100 @@ class PurchaseServices implements IPurchaseServices
                 'message' => 'Compras del evento obtenidas exitosamente'
             ];
         } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+
+
+    public function createSinglePurchase(DTOsPurchase $data)
+    {
+        try {
+            DB::beginTransaction();
+
+            $event = Event::findOrFail($data->getEventId());
+            $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
+
+            $ticketNumbers = $data->getSpecificNumbers();
+
+            if (empty($ticketNumbers)) {
+                throw new Exception("No se especificaron números de tickets.");
+            }
+
+            // ✅ Validar que todos los números estén disponibles (con lock)
+            foreach ($ticketNumbers as $ticketNumber) {
+                $isUsed = Purchase::where('event_id', $event->id)
+                    ->where('ticket_number', $ticketNumber)
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($isUsed) {
+                    throw new Exception("El número {$ticketNumber} ya fue reservado por otro usuario.");
+                }
+            }
+
+            // ✅ Generar un solo transaction_id para agrupar todas las compras
+            $transactionId = 'TXN-' . strtoupper(Str::random(12));
+
+            $purchases = [];
+
+            // ✅ Crear una compra por cada número
+            foreach ($ticketNumbers as $ticketNumber) {
+                $purchaseData = new DTOsPurchase(
+                    event_id: $data->getEventId(),
+                    event_price_id: $data->getEventPriceId(),
+                    payment_method_id: $data->getPaymentMethodId(),
+                    quantity: 1, // ✅ Cada compra es de 1 ticket
+                    email: $data->getEmail(),
+                    whatsapp: $data->getWhatsapp(),
+                    currency: $data->getCurrency(),
+                    user_id: $data->getUserId(),
+                    specific_numbers: [$ticketNumber],
+                    payment_reference: $data->getPaymentReference(),
+                    payment_proof_url: $data->getPaymentProofUrl(),
+                    total_amount: $eventPrice->amount // ✅ Precio unitario
+                );
+
+                $purchase = $this->PurchaseRepository->createSinglePurchase(
+                    $purchaseData,
+                    $eventPrice->amount,
+                    $transactionId,
+                    $ticketNumber
+                );
+
+                $purchases[] = $purchase;
+            }
+
+            // ✅ Generar un solo QR Code para toda la transacción
+            $qrImageUrl = $this->generatePurchaseQRCode($transactionId);
+
+            if ($qrImageUrl) {
+                Purchase::where('transaction_id', $transactionId)
+                    ->update(['qr_code_url' => $qrImageUrl]);
+            }
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'ticket_numbers' => $ticketNumbers,
+                    'quantity' => count($ticketNumbers),
+                    'total_amount' => $data->getTotalAmount(),
+                    'qr_code_url' => $qrImageUrl,
+                ],
+                'message' => 'Compra registrada exitosamente. Números reservados: '
+                    . implode(', ', $ticketNumbers)
+                    . '. Espera la aprobación del administrador.'
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+            Log::error('Error creating single purchase: ' . $exception->getMessage());
+
             return [
                 'success' => false,
                 'message' => $exception->getMessage()
