@@ -6,6 +6,7 @@ use App\DTOs\Event\DTOsEvent;
 use App\Interfaces\Event\IEventServices;
 use App\Interfaces\Event\IEventRepository;
 use Exception;
+use Illuminate\Support\Facades\Log;
 
 class EventServices implements IEventServices
 {
@@ -67,46 +68,49 @@ class EventServices implements IEventServices
     public function getEventWithParticipants($id)
     {
         try {
-            $event = $this->eventRepository->getEventWithParticipants($id);
+            $event = $this->eventRepository->getEventById($id);
+
+            // Obtener estadísticas básicas
             $statistics = $event->getStatistics();
 
-            // Información adicional de participantes
-            $participantsDetails = $event->purchases
-                ->groupBy('user_id')
-                ->map(function ($userPurchases) {
-                    $user = $userPurchases->first()->user;
-                    return [
-                        'user_id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'total_tickets' => $userPurchases->count(),
-                        'total_spent' => $userPurchases->sum('amount'),
-                        'ticket_numbers' => $userPurchases->pluck('ticket_number')->toArray(),
-                        'purchase_dates' => $userPurchases->pluck('created_at')->toArray(),
-                        'currencies_used' => $userPurchases->pluck('currency')->unique()->toArray(),
-                    ];
-                })->values();
+            // Contar participantes únicos (usuarios registrados)
+            $totalParticipants = $event->purchases()
+                ->where('status', 'completed')
+                ->whereNotNull('user_id')
+                ->distinct('user_id')
+                ->count('user_id');
+
+            // Contar compras de invitados (sin user_id)
+            $guestPurchases = $event->purchases()
+                ->where('status', 'completed')
+                ->whereNull('user_id')
+                ->count();
 
             // Análisis por moneda
-            $revenueByurrency = $event->purchases
+            $revenueByurrency = $event->purchases()
                 ->where('status', 'completed')
+                ->select('currency')
+                ->selectRaw('SUM(amount) as total_amount')
+                ->selectRaw('COUNT(*) as count')
                 ->groupBy('currency')
-                ->map(function ($purchases, $currency) {
+                ->get()
+                ->map(function ($item) {
                     return [
-                        'currency' => $currency,
-                        'total_amount' => $purchases->sum('amount'),
-                        'count' => $purchases->count(),
+                        'currency' => $item->currency,
+                        'total_amount' => floatval($item->total_amount),
+                        'count' => $item->count,
                     ];
-                })->values();
+                });
 
-            // Números más vendidos (si quieres ver patrones)
-            $ticketNumbersFrequency = $event->purchases
-                ->where('status', 'completed')
-                ->whereNotNull('ticket_number')
-                ->pluck('ticket_number')
-                ->countBy()
-                ->sortDesc()
-                ->take(10);
+            // Resumen de ventas por estado
+            $purchasesSummary = $event->purchases()
+                ->select('status')
+                ->selectRaw('COUNT(*) as count')
+                ->selectRaw('SUM(total_amount) as total_amount')
+                ->selectRaw('SUM(quantity) as total_tickets')
+                ->groupBy('status')
+                ->get()
+                ->keyBy('status');
 
             return [
                 'success' => true,
@@ -128,34 +132,53 @@ class EventServices implements IEventServices
                         'updated_at' => $event->updated_at,
                     ],
                     'statistics' => $statistics,
-                    'participants' => $participantsDetails,
+                    'participants_summary' => [
+                        'total_registered_users' => $totalParticipants,
+                        'total_guest_purchases' => $guestPurchases,
+                        'total_participants' => $totalParticipants + $guestPurchases,
+                    ],
                     'revenue_by_currency' => $revenueByurrency,
+                    'purchases_summary' => [
+                        'completed' => [
+                            'count' => $purchasesSummary->get('completed')->count ?? 0,
+                            'total_amount' => floatval($purchasesSummary->get('completed')->total_amount ?? 0),
+                            'total_tickets' => intval($purchasesSummary->get('completed')->total_tickets ?? 0),
+                        ],
+                        'pending' => [
+                            'count' => $purchasesSummary->get('pending')->count ?? 0,
+                            'total_amount' => floatval($purchasesSummary->get('pending')->total_amount ?? 0),
+                            'total_tickets' => intval($purchasesSummary->get('pending')->total_tickets ?? 0),
+                        ],
+                        'processing' => [
+                            'count' => $purchasesSummary->get('processing')->count ?? 0,
+                            'total_amount' => floatval($purchasesSummary->get('processing')->total_amount ?? 0),
+                            'total_tickets' => intval($purchasesSummary->get('processing')->total_tickets ?? 0),
+                        ],
+                        'failed' => [
+                            'count' => $purchasesSummary->get('failed')->count ?? 0,
+                            'total_amount' => floatval($purchasesSummary->get('failed')->total_amount ?? 0),
+                            'total_tickets' => intval($purchasesSummary->get('failed')->total_tickets ?? 0),
+                        ],
+                    ],
                     'prices' => [
                         'all_prices' => $event->prices,
                         'default_price' => $event->defaultPrice,
                     ],
-                    'purchases' => [
-                        'completed' => $event->purchases->where('status', 'completed')->values(),
-                        'pending' => $event->purchases->where('status', 'pending')->values(),
-                        'total_count' => $event->total_purchases,
-                        'pending_count' => $event->pending_purchases,
-                    ],
                     'ticket_analysis' => [
+                        'total_available' => ($event->end_number - $event->start_number) + 1,
                         'available_numbers' => $event->getAvailableNumbersCount(),
-                        'top_purchased_numbers' => $ticketNumbersFrequency,
+                        'sold_numbers' => (($event->end_number - $event->start_number) + 1) - $event->getAvailableNumbersCount(),
                     ],
                 ]
             ];
         } catch (Exception $exception) {
-            Log::error('Error getting event with participants: ' . $exception->getMessage());
+            Log::error('Error getting event summary: ' . $exception->getMessage());
             return [
                 'success' => false,
                 'message' => 'Error al obtener el evento: ' . $exception->getMessage()
             ];
         }
     }
-
-
 
     public function createEvent(DTOsEvent $data)
     {

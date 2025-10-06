@@ -194,6 +194,7 @@ class PurchaseRepository implements IPurchaseRepository
                     'payment_method' => $group->paymentMethod->name ?? 'N/A',
                     'payment_reference' => $group->payment_reference,
                     'payment_proof' => $group->payment_proof_url,
+                    'qr_code_url' => $group->qr_code_url,
                     'status' => $group->status,
                     'ticket_numbers' => empty($ticketNumbers) ?
                         'Pendiente de asignación' : $ticketNumbers,
