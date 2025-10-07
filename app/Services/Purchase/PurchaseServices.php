@@ -662,4 +662,99 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
+    public function createAdminPurchase(DTOsPurchase $data, bool $autoApprove = false)
+    {
+        try {
+            DB::beginTransaction();
+
+            $event = Event::findOrFail($data->getEventId());
+            $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
+            $ticketNumbers = $data->getSpecificNumbers();
+
+            if (empty($ticketNumbers)) {
+                throw new Exception("No se especificaron números de tickets.");
+            }
+
+            // ✅ Validar disponibilidad con lock
+            foreach ($ticketNumbers as $ticketNumber) {
+                $isUsed = Purchase::where('event_id', $event->id)
+                    ->where('ticket_number', $ticketNumber)
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($isUsed) {
+                    throw new Exception("El número {$ticketNumber} ya está reservado.");
+                }
+            }
+
+            $transactionId = 'ADM-' . strtoupper(Str::random(12));
+            $purchases = [];
+
+            // ✅ Si auto_approve = true, status = 'completed', sino 'pending'
+            $status = $autoApprove ? 'completed' : 'pending';
+
+            foreach ($ticketNumbers as $ticketNumber) {
+                $purchaseData = new DTOsPurchase(
+                    event_id: $data->getEventId(),
+                    event_price_id: $data->getEventPriceId(),
+                    payment_method_id: $data->getPaymentMethodId(),
+                    quantity: 1,
+                    email: $data->getEmail(),
+                    whatsapp: $data->getWhatsapp(),
+                    currency: $data->getCurrency(),
+                    user_id: $data->getUserId(), // ID del admin autenticado
+                    specific_numbers: [$ticketNumber],
+                    payment_reference: $data->getPaymentReference(),
+                    payment_proof_url: $data->getPaymentProofUrl(),
+                    total_amount: $eventPrice->amount
+                );
+
+                $purchase = $this->PurchaseRepository->createAdminPurchase(
+                    $purchaseData,
+                    $eventPrice->amount,
+                    $transactionId,
+                    $ticketNumber,
+                    $status // ✅ Pasar el status
+                );
+
+                $purchases[] = $purchase;
+            }
+
+            // ✅ Generar QR Code
+            $qrImageUrl = $this->generatePurchaseQRCode($transactionId);
+
+            if ($qrImageUrl) {
+                Purchase::where('transaction_id', $transactionId)
+                    ->update(['qr_code_url' => $qrImageUrl]);
+            }
+
+            DB::commit();
+
+            // ✅ Mensaje dinámico según el status
+            $message = $autoApprove
+                ? 'Compra creada y aprobada automáticamente. Números asignados: ' . implode(', ', $ticketNumbers)
+                : 'Compra registrada exitosamente. Status: Pendiente de aprobación. Números reservados: ' . implode(', ', $ticketNumbers);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'ticket_numbers' => $ticketNumbers,
+                    'quantity' => count($ticketNumbers),
+                    'total_amount' => $data->getTotalAmount(),
+                    'status' => $status,
+                    'qr_code_url' => $qrImageUrl,
+                ],
+                'message' => $message
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+            Log::error('Error creating admin purchase: ' . $exception->getMessage());
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
 }

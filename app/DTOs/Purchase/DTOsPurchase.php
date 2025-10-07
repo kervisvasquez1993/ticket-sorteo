@@ -2,6 +2,7 @@
 
 namespace App\DTOs\Purchase;
 
+use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
@@ -50,6 +51,55 @@ class DTOsPurchase
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,
         );
+    }
+    public static function fromAdminPurchaseRequest(CreateAdminPurchaseRequest $request): self
+    {
+        $validated = $request->validated();
+        $paymentProofUrl = null;
+
+        // ✅ Subir comprobante solo si se envía
+        if ($request->hasFile('payment_proof_url')) {
+            $paymentProofUrl = self::uploadPaymentProofToS3Admin($request);
+        }
+
+        $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
+        $ticketCount = count($validated['ticket_numbers']);
+        $totalAmount = $eventPrice->amount * $ticketCount;
+
+        return new self(
+            event_id: $validated['event_id'],
+            event_price_id: $validated['event_price_id'],
+            payment_method_id: $validated['payment_method_id'],
+            quantity: $ticketCount,
+            email: $validated['email'],
+            whatsapp: $validated['whatsapp'],
+            currency: $validated['currency'] ?? $eventPrice->currency,
+            user_id: Auth::id(), // ✅ ID del admin autenticado
+            specific_numbers: $validated['ticket_numbers'],
+            payment_reference: $validated['payment_reference'] ?? null,
+            payment_proof_url: $paymentProofUrl,
+            total_amount: $totalAmount,
+        );
+    }
+
+    private static function uploadPaymentProofToS3Admin(CreateAdminPurchaseRequest $request): ?string
+    {
+        if ($request->hasFile('payment_proof_url')) {
+            $file = $request->file('payment_proof_url');
+            $fileName = 'payment-proofs/admin-' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            $uploaded = Storage::disk('s3')->put($fileName, file_get_contents($file), [
+                'visibility' => 'public',
+                'ContentType' => $file->getMimeType()
+            ]);
+
+            if ($uploaded) {
+                $url = "https://backend-imagen-br.s3.us-east-2.amazonaws.com/" . $fileName;
+                Log::info('Admin payment proof uploaded', ['url' => $url]);
+                return $url;
+            }
+        }
+        return null;
     }
 
     private static function uploadPaymentProofToS3(CreatePurchaseRequest $request): ?string

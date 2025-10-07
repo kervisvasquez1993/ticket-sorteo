@@ -21,7 +21,10 @@ Route::middleware('auth:api')->group(function () {
         Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
         Route::patch('{transactionId}/approve', [PurchaseController::class, 'approve']);
         Route::patch('{transactionId}/reject', [PurchaseController::class, 'reject']);
+         Route::post('admin', [PurchaseController::class, 'storeAdmin']);
     });
+
+
 
     // Route::post('purchases', [PurchaseController::class, 'store']);
     Route::get('purchases', [PurchaseController::class, 'index']);

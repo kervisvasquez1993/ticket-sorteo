@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Purchase;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
@@ -185,6 +186,26 @@ class PurchaseController extends Controller
     {
         $result = $this->PurchaseServices->createSinglePurchase(
             DTOsPurchase::fromSinglePurchaseRequest($request)
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 201);
+    }
+    public function storeAdmin(CreateAdminPurchaseRequest $request)
+    {
+        $autoApprove = $request->input('auto_approve', true);
+
+        $result = $this->PurchaseServices->createAdminPurchase(
+            DTOsPurchase::fromAdminPurchaseRequest($request),
+            $autoApprove
         );
 
         if (!$result['success']) {
