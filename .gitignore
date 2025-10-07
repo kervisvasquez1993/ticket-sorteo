@@ -1,3 +1,5 @@
+/app/secrets/oauth/*
+app/secrets/oauth/oauth-public.key
 *.log
 .DS_Store
 .env
@@ -22,5 +24,4 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
-oauth/oauth-private.key
-oauth/oauth-public.key
+
