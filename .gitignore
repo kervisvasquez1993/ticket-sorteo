@@ -22,3 +22,5 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+oauth/oauth-private.key
+oauth/oauth-public.key
