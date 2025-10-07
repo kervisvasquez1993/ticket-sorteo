@@ -77,6 +77,6 @@ php artisan view:cache\n\
 nginx -g "daemon off;" &\n\
 php-fpm' > /start.sh && chmod +x /start.sh
 
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["/start.sh"]
