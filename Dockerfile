@@ -38,16 +38,42 @@ COPY . .
 # Instalar dependencias de Composer
 RUN composer install --no-dev --optimize-autoloader
 
-# Configurar permisos
+# Crear directorios necesarios si no existen
+RUN mkdir -p storage/logs \
+    && mkdir -p storage/framework/cache \
+    && mkdir -p storage/framework/sessions \
+    && mkdir -p storage/framework/views \
+    && mkdir -p bootstrap/cache
+
+# Configurar permisos CORRECTAMENTE
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
-    && chmod -R 775 /var/www/html/storage \
-    && chmod -R 775 /var/www/html/bootstrap/cache
+    && chmod -R 775 storage \
+    && chmod -R 775 bootstrap/cache
 
-# Script de inicio
+# Script de inicio mejorado
 RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+# Asegurar permisos al inicio\n\
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache\n\
+chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache\n\
+\n\
+# Limpiar caches\n\
+php artisan config:clear\n\
+php artisan cache:clear\n\
+\n\
+# Generar llaves de Passport si no existen\n\
+if [ ! -f /var/www/html/storage/oauth-private.key ]; then\n\
+    php artisan passport:keys --force\n\
+fi\n\
+\n\
+# Cachear configuración\n\
 php artisan config:cache\n\
 php artisan route:cache\n\
+php artisan view:cache\n\
+\n\
+# Iniciar servicios\n\
 nginx -g "daemon off;" &\n\
 php-fpm' > /start.sh && chmod +x /start.sh
 
