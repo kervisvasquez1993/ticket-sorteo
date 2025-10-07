@@ -253,10 +253,13 @@ class PurchaseServices implements IPurchaseServices
     private function getAvailableNumbersCount(Event $event): int
     {
         $totalNumbers = ($event->end_number - $event->start_number) + 1;
-        $usedNumbers = $event->purchases()->whereNotNull('ticket_number')->count();
+        $usedNumbers = Purchase::where('event_id', $event->id)
+            ->whereNotNull('ticket_number')
+            ->count();
 
         return $totalNumbers - $usedNumbers;
     }
+
 
     /**
      * Validar números específicos
@@ -757,4 +760,111 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
+
+    public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true)
+    {
+        try {
+            DB::beginTransaction();
+
+            $event = Event::findOrFail($data->getEventId());
+            $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
+
+            // ✅ Validar disponibilidad de números
+            $availableCount = $this->getAvailableNumbersCount($event);
+
+            if ($availableCount < $data->getQuantity()) {
+                throw new Exception("Solo quedan {$availableCount} números disponibles.");
+            }
+
+            // ✅ Generar transaction_id único con prefijo ADM
+            $transactionId = 'ADM-' . strtoupper(Str::random(12));
+
+            $totalAmount = $data->getTotalAmount();
+            $purchases = [];
+
+            // ✅ Crear registros sin números asignados
+            for ($i = 0; $i < $data->getQuantity(); $i++) {
+                $purchaseData = new DTOsPurchase(
+                    event_id: $data->getEventId(),
+                    event_price_id: $data->getEventPriceId(),
+                    payment_method_id: $data->getPaymentMethodId(),
+                    quantity: 1,
+                    email: $data->getEmail(),
+                    whatsapp: $data->getWhatsapp(),
+                    currency: $data->getCurrency(),
+                    user_id: $data->getUserId(), // ID del admin
+                    specific_numbers: null,
+                    payment_reference: $data->getPaymentReference(),
+                    payment_proof_url: $data->getPaymentProofUrl(),
+                    total_amount: $totalAmount
+                );
+
+                $purchase = $this->PurchaseRepository->createAdminRandomPurchase(
+                    $purchaseData,
+                    $eventPrice->amount,
+                    $transactionId
+                );
+
+                $purchases[] = $purchase;
+            }
+
+            // ✅ Generar QR Code
+            $qrImageUrl = $this->generatePurchaseQRCode($transactionId);
+
+            if ($qrImageUrl) {
+                Purchase::where('transaction_id', $transactionId)
+                    ->update(['qr_code_url' => $qrImageUrl]);
+            }
+
+            DB::commit();
+
+            // ✅ Si auto_approve es true, ejecutar lógica de aprobación inmediatamente
+            if ($autoApprove) {
+                $approvalResult = $this->approvePurchase($transactionId);
+
+                if (!$approvalResult['success']) {
+                    throw new Exception($approvalResult['message']);
+                }
+
+                return [
+                    'success' => true,
+                    'data' => [
+                        'transaction_id' => $transactionId,
+                        'quantity' => $data->getQuantity(),
+                        'total_amount' => $totalAmount,
+                        'assigned_numbers' => $approvalResult['data']['assigned_numbers'],
+                        'status' => 'completed',
+                        'qr_code_url' => $qrImageUrl,
+                    ],
+                    'message' => 'Compra creada y aprobada automáticamente. Números asignados: '
+                        . implode(', ', $approvalResult['data']['assigned_numbers'])
+                ];
+            }
+
+            // ✅ Si no se aprueba automáticamente
+            return [
+                'success' => true,
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'quantity' => $data->getQuantity(),
+                    'total_amount' => $totalAmount,
+                    'status' => 'pending',
+                    'qr_code_url' => $qrImageUrl,
+                ],
+                'message' => 'Compra registrada exitosamente. Status: Pendiente de aprobación.'
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+            Log::error('Error creating admin random purchase: ' . $exception->getMessage());
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Obtener conteo de números disponibles
+     */
 }

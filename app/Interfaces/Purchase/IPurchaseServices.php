@@ -20,4 +20,5 @@ interface IPurchaseServices
     public function getPurchasesByEvent(string $eventId);
     public function createSinglePurchase(DTOsPurchase $data);
     public function createAdminPurchase(DTOsPurchase $data, bool $autoApprove = false);
+    public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true);
 }

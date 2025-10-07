@@ -24,4 +24,5 @@ interface IPurchaseRepository
     public function getGroupedPurchasesByEvent(string $eventId);
     public function createSinglePurchase(DTOsPurchase $data, $amount, $transactionId, $ticketNumber): Purchase;
      public function createAdminPurchase(DTOsPurchase $data, $amount, $transactionId, $ticketNumber, $status): Purchase;
+      public function createAdminRandomPurchase(DTOsPurchase $data, $amount, $transactionId): Purchase;
 }

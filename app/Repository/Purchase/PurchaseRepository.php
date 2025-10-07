@@ -543,4 +543,26 @@ class PurchaseRepository implements IPurchaseRepository
 
         return Purchase::create($purchaseData);
     }
+    public function createAdminRandomPurchase(DTOsPurchase $data, $amount, $transactionId): Purchase
+    {
+        $purchaseData = [
+            'user_id' => $data->getUserId(), // ✅ ID del admin
+            'email' => $data->getEmail(),
+            'whatsapp' => $data->getWhatsapp(),
+            'event_id' => $data->getEventId(),
+            'event_price_id' => $data->getEventPriceId(),
+            'payment_method_id' => $data->getPaymentMethodId(),
+            'amount' => $amount,
+            'currency' => $data->getCurrency(),
+            'status' => 'pending', // ✅ Siempre pending, luego se aprueba
+            'ticket_number' => null, // ✅ Sin número asignado aún
+            'transaction_id' => $transactionId,
+            'payment_reference' => $data->getPaymentReference(),
+            'payment_proof_url' => $data->getPaymentProofUrl(),
+            'quantity' => 1,
+            'total_amount' => $data->getTotalAmount(),
+        ];
+
+        return Purchase::create($purchaseData);
+    }
 }
