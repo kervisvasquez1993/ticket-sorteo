@@ -77,6 +77,6 @@ php artisan view:cache\n\
 nginx -g "daemon off;" &\n\
 php-fpm' > /start.sh && chmod +x /start.sh
 
-EXPOSE 80
+EXPOSE 81  # Cambiar de 80 a 81
 
 CMD ["/start.sh"]
