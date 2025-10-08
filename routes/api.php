@@ -13,6 +13,8 @@ Route::post('/register', [AuthController::class, 'register'])->name('register');
 Route::post('purchases', [PurchaseController::class, 'store']);
 Route::post('purchases/single', [PurchaseController::class, 'storeSingle']);
 Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
+Route::get('/events/active', [EventController::class, 'active']);
+Route::get('/events-prices', [EventPriceController::class, 'index']);
 Route::middleware('auth:api')->group(function () {
 
     Route::prefix('purchases')->group(function () {
@@ -21,8 +23,8 @@ Route::middleware('auth:api')->group(function () {
         Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
         Route::patch('{transactionId}/approve', [PurchaseController::class, 'approve']);
         Route::patch('{transactionId}/reject', [PurchaseController::class, 'reject']);
-         Route::post('admin', [PurchaseController::class, 'storeAdmin']);
-          Route::post('admin/random', [PurchaseController::class, 'storeAdminRandom']);
+        Route::post('admin', [PurchaseController::class, 'storeAdmin']);
+        Route::post('admin/random', [PurchaseController::class, 'storeAdminRandom']);
     });
 
 
@@ -54,8 +56,8 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/events', [EventController::class, 'index']);
         Route::post('/events', [EventController::class, 'store']);
         Route::post('/events-prices', [EventPriceController::class, 'store']);
-        Route::get('/events-prices', [EventPriceController::class, 'index']);
-        Route::get('/events/active', [EventController::class, 'active']);
+
+
         Route::get('/events/{id}', [EventController::class, 'show']);
         Route::put('/events/{id}', [EventController::class, 'update']);
         Route::delete('/events/{id}', [EventController::class, 'destroy']);
