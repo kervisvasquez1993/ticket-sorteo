@@ -3,6 +3,7 @@
 namespace App\Services\EventPrice;
 
 use App\DTOs\EventPrice\DTOsEventPrice;
+use App\DTOs\EventPrice\DTOsEventPriceFilter;
 use App\Interfaces\EventPrice\IEventPriceServices;
 use App\Interfaces\EventPrice\IEventPriceRepository;
 use Exception;
@@ -17,10 +18,10 @@ class EventPriceServices implements IEventPriceServices
         $this->EventPriceRepository = $EventPriceRepositoryInterface;
     }
 
-    public function getAllEventPrices()
+    public function getAllEventPrices(?DTOsEventPriceFilter $filters = null)
     {
         try {
-            $results = $this->EventPriceRepository->getAllEventPrices();
+            $results = $this->EventPriceRepository->getAllEventPrices($filters);
             return [
                 'success' => true,
                 'data' => $results
@@ -32,7 +33,6 @@ class EventPriceServices implements IEventPriceServices
             ];
         }
     }
-
     public function getEventPriceById($id)
     {
         try {

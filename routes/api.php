@@ -54,6 +54,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/events', [EventController::class, 'index']);
         Route::post('/events', [EventController::class, 'store']);
         Route::post('/events-prices', [EventPriceController::class, 'store']);
+        Route::get('/events-prices', [EventPriceController::class, 'index']);
         Route::get('/events/active', [EventController::class, 'active']);
         Route::get('/events/{id}', [EventController::class, 'show']);
         Route::put('/events/{id}', [EventController::class, 'update']);

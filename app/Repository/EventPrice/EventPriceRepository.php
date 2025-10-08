@@ -3,16 +3,48 @@
 namespace App\Repository\EventPrice;
 
 use App\DTOs\EventPrice\DTOsEventPrice;
+use App\DTOs\EventPrice\DTOsEventPriceFilter;
 use App\Interfaces\EventPrice\IEventPriceRepository;
 use App\Models\EventPrice;
 
 class EventPriceRepository implements IEventPriceRepository
 {
-    public function getAllEventPrices()
+    public function getAllEventPrices(?DTOsEventPriceFilter $filters = null)
     {
-        return EventPrice::with('event')->get();
-    }
+        $query = EventPrice::with('event');
 
+        if ($filters) {
+            // Filtrar por event_id
+            if ($filters->getEventId()) {
+                $query->where('event_id', $filters->getEventId());
+            }
+
+            // Filtrar por currency
+            if ($filters->getCurrency() && $filters->isValidCurrency()) {
+                $query->where('currency', $filters->getCurrency());
+            }
+
+            // Filtrar por is_default
+            if ($filters->getIsDefault() !== null) {
+                $query->where('is_default', $filters->getIsDefault());
+            }
+
+            // Filtrar por is_active
+            if ($filters->getIsActive() !== null) {
+                $query->where('is_active', $filters->getIsActive());
+            }
+
+            // Ordenamiento
+            if ($filters->isValidSortField() && $filters->isValidSortOrder()) {
+                $query->orderBy($filters->getSortBy(), $filters->getSortOrder());
+            }
+
+            // Paginación
+            return $query->paginate($filters->getPerPage(), ['*'], 'page', $filters->getPage());
+        }
+
+        return $query->get();
+    }
     public function getEventPriceById($id): EventPrice
     {
         $EventPrice = EventPrice::with('event')->find($id);
@@ -31,7 +63,7 @@ class EventPriceRepository implements IEventPriceRepository
 
     public function updateEventPrice(DTOsEventPrice $data, EventPrice $EventPrice): EventPrice
     {
-        $updateData = array_filter($data->toArray(), function($value, $key) {
+        $updateData = array_filter($data->toArray(), function ($value, $key) {
             // Permitir booleanos false, pero filtrar valores vacíos
             if ($key === 'is_default' || $key === 'is_active') {
                 return true;
@@ -63,7 +95,7 @@ class EventPriceRepository implements IEventPriceRepository
     public function removeDefaultFromEvent(int $eventId, ?int $exceptId = null): void
     {
         $query = EventPrice::where('event_id', $eventId)
-                          ->where('is_default', true);
+            ->where('is_default', true);
 
         if ($exceptId) {
             $query->where('id', '!=', $exceptId);
@@ -79,9 +111,9 @@ class EventPriceRepository implements IEventPriceRepository
     public function assignDefaultToFirstActive(int $eventId): void
     {
         $firstActivePrice = EventPrice::where('event_id', $eventId)
-                                     ->where('is_active', true)
-                                     ->orderBy('created_at', 'asc')
-                                     ->first();
+            ->where('is_active', true)
+            ->orderBy('created_at', 'asc')
+            ->first();
 
         if ($firstActivePrice) {
             $firstActivePrice->update(['is_default' => true]);
