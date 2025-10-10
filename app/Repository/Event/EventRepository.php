@@ -176,11 +176,39 @@ class EventRepository implements IEventRepository
 
     public function getActiveEvents()
     {
-        return Event::where('status', 'active')
+        return Event::with(['activePrices', 'defaultPrice'])
+            ->where('status', 'active')
             ->where('end_date', '>=', now())
+            ->addSelect([
+                'events.*',
+                // Cantidad total de tickets vendidos
+                'total_tickets_sold' => function ($query) {
+                    $query->selectRaw('COALESCE(SUM(quantity), 0)')
+                        ->from('purchases')
+                        ->whereColumn('purchases.event_id', 'events.id');
+                }
+            ])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($event) {
+                $totalTickets = $event->end_number - $event->start_number + 1;
+                $ticketsSold = intval($event->total_tickets_sold ?? 0);
+                $percentageSold = $totalTickets > 0 ? round(($ticketsSold / $totalTickets) * 100, 2) : 0;
+
+                $event->tickets_summary = [
+                    'total_available' => $totalTickets,
+                    'total_sold' => $ticketsSold,
+                    'available' => $totalTickets - $ticketsSold,
+                    'percentage_sold' => $percentageSold
+                ];
+
+                // Limpiar el campo temporal
+                unset($event->total_tickets_sold);
+
+                return $event;
+            });
     }
+
 
     public function getEventById($id): Event
     {
