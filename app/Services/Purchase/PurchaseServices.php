@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use SimpleSoftwareIO\QrCode\Facades\QrCode as QrCodeGenerator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 
 class PurchaseServices implements IPurchaseServices
@@ -585,19 +586,43 @@ class PurchaseServices implements IPurchaseServices
             $ticketNumbers = $data->getSpecificNumbers();
 
             if (empty($ticketNumbers)) {
-                throw new Exception("No se especificaron números de tickets.");
+                throw ValidationException::withMessages([
+                    'ticket_numbers' => ['Debes seleccionar al menos un número de ticket.']
+                ]);
             }
 
             // ✅ Validar que todos los números estén disponibles (con lock)
-            foreach ($ticketNumbers as $ticketNumber) {
+            $reservedNumbers = [];
+
+            foreach ($ticketNumbers as $index => $ticketNumber) {
                 $isUsed = Purchase::where('event_id', $event->id)
                     ->where('ticket_number', $ticketNumber)
                     ->lockForUpdate()
                     ->exists();
 
                 if ($isUsed) {
-                    throw new Exception("El número {$ticketNumber} ya fue reservado por otro usuario.");
+                    $reservedNumbers[$index] = $ticketNumber;
                 }
+            }
+
+            // ✅ Si hay números reservados, lanzar ValidationException estructurada
+            if (!empty($reservedNumbers)) {
+                $errors = [];
+
+                // Opción 1: Un solo mensaje con todos los números (RECOMENDADO - MÁS SIMPLE)
+                $errors['ticket_numbers'] = [
+                    'Los siguientes números ya están reservados: ' . implode(', ', $reservedNumbers) . '. Por favor, selecciona otros números.'
+                ];
+
+                /* Opción 2: Un error por cada número (si quieres ser muy específico)
+            foreach ($reservedNumbers as $index => $number) {
+                $errors["ticket_numbers.{$index}"] = [
+                    "El número {$number} ya está reservado. Por favor, selecciona otro número."
+                ];
+            }
+            */
+
+                throw ValidationException::withMessages($errors);
             }
 
             // ✅ Generar un solo transaction_id para agrupar todas las compras
@@ -611,7 +636,7 @@ class PurchaseServices implements IPurchaseServices
                     event_id: $data->getEventId(),
                     event_price_id: $data->getEventPriceId(),
                     payment_method_id: $data->getPaymentMethodId(),
-                    quantity: 1, // ✅ Cada compra es de 1 ticket
+                    quantity: 1,
                     email: $data->getEmail(),
                     whatsapp: $data->getWhatsapp(),
                     currency: $data->getCurrency(),
@@ -619,7 +644,7 @@ class PurchaseServices implements IPurchaseServices
                     specific_numbers: [$ticketNumber],
                     payment_reference: $data->getPaymentReference(),
                     payment_proof_url: $data->getPaymentProofUrl(),
-                    total_amount: $eventPrice->amount // ✅ Precio unitario
+                    total_amount: $eventPrice->amount
                 );
 
                 $purchase = $this->PurchaseRepository->createSinglePurchase(
@@ -655,14 +680,18 @@ class PurchaseServices implements IPurchaseServices
                     . implode(', ', $ticketNumbers)
                     . '. Espera la aprobación del administrador.'
             ];
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            // ✅ Re-lanzar ValidationException para que Laravel la maneje correctamente
+            throw $e;
         } catch (Exception $exception) {
             DB::rollBack();
             Log::error('Error creating single purchase: ' . $exception->getMessage());
 
-            return [
-                'success' => false,
-                'message' => $exception->getMessage()
-            ];
+            // ✅ Para otros errores, también usar ValidationException
+            throw ValidationException::withMessages([
+                'general' => [$exception->getMessage()]
+            ]);
         }
     }
     public function createAdminPurchase(DTOsPurchase $data, bool $autoApprove = false)

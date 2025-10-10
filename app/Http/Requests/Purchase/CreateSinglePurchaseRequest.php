@@ -15,7 +15,6 @@ class CreateSinglePurchaseRequest extends FormRequest
         return true;
     }
 
-    // ✅ Procesar el string JSON antes de validar
     protected function prepareForValidation()
     {
         if ($this->has('ticket_numbers') && is_string($this->ticket_numbers)) {
@@ -75,28 +74,73 @@ class CreateSinglePurchaseRequest extends FormRequest
                 'array',
                 'min:1',
                 'max:10',
+                // ✅ Validación consolidada a nivel de array
+                function ($attribute, $value, $fail) {
+                    if (!is_array($value)) {
+                        return;
+                    }
+
+                    $eventId = $this->input('event_id');
+                    if (!$eventId) {
+                        return;
+                    }
+
+                    $event = \App\Models\Event::find($eventId);
+                    if (!$event) {
+                        return;
+                    }
+
+                    $errors = [];
+                    $outOfRange = [];
+                    $alreadyReserved = [];
+
+                    // Verificar números duplicados en la misma solicitud
+                    $duplicates = array_diff_assoc($value, array_unique($value));
+                    if (!empty($duplicates)) {
+                        $fail('No puedes seleccionar el mismo número dos veces.');
+                        return;
+                    }
+
+                    foreach ($value as $ticketNumber) {
+                        // Verificar que sea un número entero
+                        if (!is_int($ticketNumber)) {
+                            $fail('Todos los números de ticket deben ser números enteros.');
+                            return;
+                        }
+
+                        // Verificar rango
+                        if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
+                            $outOfRange[] = $ticketNumber;
+                            continue;
+                        }
+
+                        // Verificar si está reservado
+                        $isUsed = \App\Models\Purchase::where('event_id', $eventId)
+                            ->where('ticket_number', $ticketNumber)
+                            ->exists();
+
+                        if ($isUsed) {
+                            $alreadyReserved[] = $ticketNumber;
+                        }
+                    }
+
+                    // Reportar errores consolidados
+                    if (!empty($outOfRange)) {
+                        $numbers = implode(', ', $outOfRange);
+                        $fail("Los siguientes números están fuera del rango del evento ({$event->start_number} - {$event->end_number}): {$numbers}");
+                        return;
+                    }
+
+                    if (!empty($alreadyReserved)) {
+                        $numbers = implode(', ', $alreadyReserved);
+                        $fail("Los siguientes números ya están reservados: {$numbers}. Por favor, selecciona otros números.");
+                        return;
+                    }
+                },
             ],
             'ticket_numbers.*' => [
                 'required',
                 'integer',
-                'distinct',
-                function ($attribute, $value, $fail) {
-                    if ($this->input('event_id')) {
-                        $event = \App\Models\Event::find($this->input('event_id'));
-
-                        if ($event && ($value < $event->start_number || $value > $event->end_number)) {
-                            $fail("El número {$value} está fuera del rango del evento ({$event->start_number} - {$event->end_number}).");
-                        }
-
-                        $isUsed = \App\Models\Purchase::where('event_id', $this->input('event_id'))
-                            ->where('ticket_number', $value)
-                            ->exists();
-
-                        if ($isUsed) {
-                            $fail("El número {$value} ya está reservado. Por favor, selecciona otro número.");
-                        }
-                    }
-                },
             ],
             'currency' => [
                 'nullable',
@@ -136,12 +180,11 @@ class CreateSinglePurchaseRequest extends FormRequest
             'event_price_id.required' => 'El precio es obligatorio.',
             'payment_method_id.required' => 'El método de pago es obligatorio.',
             'ticket_numbers.required' => 'Debes seleccionar al menos un número de ticket.',
-            'ticket_numbers.array' => 'Los números de ticket deben ser un array válido en formato JSON. Ejemplo: [5, 12, 23]',
+            'ticket_numbers.array' => 'Los números de ticket deben ser un array válido.',
             'ticket_numbers.min' => 'Debes seleccionar al menos un número de ticket.',
             'ticket_numbers.max' => 'No puedes seleccionar más de 10 números a la vez.',
             'ticket_numbers.*.required' => 'Todos los números de ticket son obligatorios.',
             'ticket_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
-            'ticket_numbers.*.distinct' => 'No puedes seleccionar el mismo número dos veces.',
             'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',

@@ -15,6 +15,7 @@ Route::post('purchases/single', [PurchaseController::class, 'storeSingle']);
 Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
 Route::get('/events/active', [EventController::class, 'active']);
 Route::get('/events-prices', [EventPriceController::class, 'index']);
+ Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
 Route::middleware('auth:api')->group(function () {
 
     Route::prefix('purchases')->group(function () {
@@ -36,7 +37,7 @@ Route::middleware('auth:api')->group(function () {
 
 
     Route::prefix('payment-methods')->group(function () {
-        Route::get('/active', [PaymentMethodController::class, 'active']);
+
         Route::middleware(['admin'])->group(function () {
             Route::get('/', [PaymentMethodController::class, 'index']);
             Route::post('/', [PaymentMethodController::class, 'store']);
