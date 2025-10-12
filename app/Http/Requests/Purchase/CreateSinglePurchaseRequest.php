@@ -74,7 +74,6 @@ class CreateSinglePurchaseRequest extends FormRequest
                 'array',
                 'min:1',
                 'max:10',
-                // ✅ Validación consolidada a nivel de array
                 function ($attribute, $value, $fail) {
                     if (!is_array($value)) {
                         return;
@@ -143,9 +142,40 @@ class CreateSinglePurchaseRequest extends FormRequest
                 'integer',
             ],
             'currency' => [
-                'nullable',
+                'required',
                 'string',
-                Rule::in(['USD', 'BS']),
+                Rule::in(['USD', 'VES']),
+                function ($attribute, $value, $fail) {
+                    $paymentMethodId = $this->input('payment_method_id');
+
+                    if (!$paymentMethodId) {
+                        return;
+                    }
+
+                    $paymentMethod = \App\Models\PaymentMethod::find($paymentMethodId);
+
+                    if (!$paymentMethod) {
+                        return;
+                    }
+
+                    // Definir qué monedas acepta cada tipo de método de pago
+                    $allowedCurrencies = [
+                        'pago_movil' => ['VES'],
+                        'zelle' => ['USD'],
+                        'binance' => ['USD'],
+                        // Agrega más tipos según tu sistema
+                    ];
+
+                    $methodType = $paymentMethod->type;
+
+                    if (isset($allowedCurrencies[$methodType])) {
+                        if (!in_array($value, $allowedCurrencies[$methodType])) {
+                            $allowed = implode(' o ', $allowedCurrencies[$methodType]);
+                            $methodName = $paymentMethod->name;
+                            $fail("El método de pago '{$methodName}' solo acepta pagos en {$allowed}. Por favor, selecciona un precio en la moneda correcta.");
+                        }
+                    }
+                },
             ],
             'payment_reference' => [
                 'nullable',
@@ -185,6 +215,8 @@ class CreateSinglePurchaseRequest extends FormRequest
             'ticket_numbers.max' => 'No puedes seleccionar más de 10 números a la vez.',
             'ticket_numbers.*.required' => 'Todos los números de ticket son obligatorios.',
             'ticket_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
+            'currency.required' => 'La moneda es obligatoria.',
+            'currency.in' => 'La moneda debe ser USD o VES.',
             'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
