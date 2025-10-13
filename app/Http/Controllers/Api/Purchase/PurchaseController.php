@@ -9,6 +9,7 @@ use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminRandomPurchaseRequest;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
+use App\Http\Requests\Purchase\GetPurchasesByWhatsAppRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
 use App\Interfaces\Purchase\IPurchaseServices;
 use Illuminate\Http\Request;
@@ -240,5 +241,19 @@ class PurchaseController extends Controller
             'message' => $result['message'],
             'data' => $result['data']
         ], 201);
+    }
+    public function getByWhatsApp(GetPurchasesByWhatsAppRequest $request, string $whatsapp)
+    {
+        // La validación ya se hizo en el Request
+        $result = $this->PurchaseServices->getPurchasesByWhatsApp($whatsapp);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message'],
+                'data' => $result['data'] ?? []
+            ], $result['data'] ? 200 : 404);
+        }
+
+        return response()->json($result['data'], 200);
     }
 }

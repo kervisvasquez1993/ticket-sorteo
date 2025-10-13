@@ -893,7 +893,37 @@ class PurchaseServices implements IPurchaseServices
         }
     }
 
-    /**
-     * Obtener conteo de números disponibles
-     */
+
+
+    public function getPurchasesByWhatsApp(string $whatsapp)
+    {
+        try {
+            $results = $this->PurchaseRepository->getPurchasesByWhatsApp($whatsapp);
+
+            if ($results->isEmpty()) {
+                return [
+                    'success' => false,
+                    'message' => 'No se encontraron compras para este número de WhatsApp',
+                    'data' => []
+                ];
+            }
+
+            return [
+                'success' => true,
+                'data' => [
+                    'purchases' => $results,
+                    'total_purchases' => $results->count(),
+                    'total_tickets' => $results->sum('quantity'),
+                    'whatsapp' => $whatsapp
+                ],
+                'message' => 'Compras obtenidas exitosamente'
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'data' => []
+            ];
+        }
+    }
 }

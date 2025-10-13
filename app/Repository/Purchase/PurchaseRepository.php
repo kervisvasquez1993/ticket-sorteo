@@ -565,4 +565,89 @@ class PurchaseRepository implements IPurchaseRepository
 
         return Purchase::create($purchaseData);
     }
+
+    public function getPurchasesByWhatsApp(string $whatsapp)
+    {
+        $results = Purchase::select(
+            'transaction_id',
+            DB::raw('MIN(id) as first_purchase_id'),
+            DB::raw('MIN(created_at) as created_at'),
+            DB::raw('COUNT(*) as quantity'),
+            DB::raw('SUM(amount) as total_amount'),
+            'currency',
+            'status',
+            'event_id',
+            'payment_method_id',
+            'payment_reference',
+            'payment_proof_url',
+            'user_id',
+            DB::raw('MAX(email) as email'),
+            DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(qr_code_url) as qr_code_url')
+        )
+            ->where('whatsapp', $whatsapp)
+            ->with([
+                'event:id,name',
+                'paymentMethod:id,name',
+                'user:id,name,email'
+            ])
+            ->groupBy(
+                'transaction_id',
+                'currency',
+                'status',
+                'event_id',
+                'payment_method_id',
+                'payment_reference',
+                'payment_proof_url',
+                'user_id'
+            )
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return $results->map(function ($group) {
+            $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
+                ->pluck('id')
+                ->toArray();
+
+            $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
+                ->whereNotNull('ticket_number')
+                ->pluck('ticket_number')
+                ->toArray();
+
+            // Manejar user null para compras de invitados
+            $userData = null;
+            if ($group->user) {
+                $userData = [
+                    'id' => $group->user->id,
+                    'name' => $group->user->name,
+                    'email' => $group->user->email
+                ];
+            }
+
+            return [
+                'transaction_id' => $group->transaction_id,
+                'event' => [
+                    'id' => $group->event->id,
+                    'name' => $group->event->name
+                ],
+                'user' => $userData,
+                'email' => $group->email,
+                'whatsapp' => $group->whatsapp,
+                'quantity' => $group->quantity,
+                'unit_price' => number_format($group->total_amount / $group->quantity, 2),
+                'total_amount' => number_format($group->total_amount, 2),
+                'currency' => $group->currency,
+                'payment_method' => $group->paymentMethod->name ?? 'N/A',
+                'payment_reference' => $group->payment_reference,
+                'payment_proof' => $group->payment_proof_url,
+                'qr_code_url' => $group->qr_code_url,
+                'status' => $group->status,
+                'ticket_numbers' => empty($ticketNumbers)
+                    ? 'Pendiente de asignación'
+                    : $ticketNumbers,
+                'purchase_ids' => $purchaseIds,
+                'created_at' => $group->created_at->toDateTimeString()
+            ];
+        });
+    }
 }

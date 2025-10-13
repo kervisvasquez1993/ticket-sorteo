@@ -16,6 +16,8 @@ Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTra
 Route::get('/events/active', [EventController::class, 'active']);
 Route::get('/events-prices', [EventPriceController::class, 'index']);
  Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
+ Route::get('purchases-whatsapp/{whatsapp}', [PurchaseController::class, 'getByWhatsApp'])
+    ->name('purchases.by.whatsapp');
 Route::middleware('auth:api')->group(function () {
 
     Route::prefix('purchases')->group(function () {
@@ -28,9 +30,6 @@ Route::middleware('auth:api')->group(function () {
         Route::post('admin/random', [PurchaseController::class, 'storeAdminRandom']);
     });
 
-
-
-    // Route::post('purchases', [PurchaseController::class, 'store']);
     Route::get('purchases', [PurchaseController::class, 'index']);
     Route::get('purchases/event/{eventId}', [PurchaseController::class, 'getPurchasesByEvent']);
 
