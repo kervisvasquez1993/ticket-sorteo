@@ -15,7 +15,7 @@ return new class extends Migration
             $table->foreignId('user_id')->nullable()->constrained()->onDelete('set null');
 
             // ✅ Campos obligatorios para identificar al comprador
-            $table->string('email');
+            $table->string('email')->nullable();
             $table->string('whatsapp', 20);
 
             $table->foreignId('event_id')->constrained()->onDelete('cascade');
