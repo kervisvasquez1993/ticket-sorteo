@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Event\EventController;
 use App\Http\Controllers\Api\EventPrice\EventPriceController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentMethod\PaymentMethodController;
 use App\Http\Controllers\Api\Purchase\PurchaseController;
 use App\Http\Controllers\Auth\AuthController;
@@ -15,11 +16,36 @@ Route::post('purchases/single', [PurchaseController::class, 'storeSingle']);
 Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
 Route::get('/events/active', [EventController::class, 'active']);
 Route::get('/events-prices', [EventPriceController::class, 'index']);
- Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
- Route::get('purchases-whatsapp/{whatsapp}', [PurchaseController::class, 'getByWhatsApp'])
+Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
+Route::get('purchases-whatsapp/{whatsapp}', [PurchaseController::class, 'getByWhatsApp'])
     ->name('purchases.by.whatsapp');
 Route::middleware('auth:api')->group(function () {
 
+    Route::prefix('notifications')->group(function () {
+        // Obtener todas las notificaciones (paginadas)
+        Route::get('/', [NotificationController::class, 'index']);
+
+        // Obtener solo no leídas
+        Route::get('/unread', [NotificationController::class, 'unread']);
+
+        // Obtener conteo de no leídas
+        Route::get('/unread/count', [NotificationController::class, 'unreadCount']);
+
+        // Ver una notificación específica
+        Route::get('/{id}', [NotificationController::class, 'show']);
+
+        // Marcar una como leída
+        Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
+
+        // Marcar todas como leídas
+        Route::patch('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+
+        // Eliminar una notificación
+        Route::delete('/{id}', [NotificationController::class, 'destroy']);
+
+        // Eliminar todas las leídas
+        Route::delete('/clear/read', [NotificationController::class, 'clearRead']);
+    });
     Route::prefix('purchases')->group(function () {
         // Rutas específicas
         Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
