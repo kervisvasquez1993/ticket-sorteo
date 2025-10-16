@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/register', [AuthController::class, 'register'])->name('register');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth:api');
 Route::post('purchases', [PurchaseController::class, 'store']);
 Route::post('purchases/single', [PurchaseController::class, 'storeSingle']);
 Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
@@ -20,6 +21,7 @@ Route::get('payment-methods/active', [PaymentMethodController::class, 'active'])
 Route::get('purchases-whatsapp/{whatsapp}', [PurchaseController::class, 'getByWhatsApp'])
     ->name('purchases.by.whatsapp');
 Route::middleware('auth:api')->group(function () {
+
 
     Route::prefix('notifications')->group(function () {
         // Obtener todas las notificaciones (paginadas)

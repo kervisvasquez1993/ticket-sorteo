@@ -7,6 +7,7 @@ use App\DTOs\Auth\DTOsLogin;
 use App\DTOs\Auth\DTOsRegister;
 use App\Interfaces\Auth\IAuthServices;
 use App\Interfaces\Auth\IAuthRepository;
+use App\Models\User;
 use Exception;
 
 class AuthServices implements IAuthServices
@@ -61,6 +62,22 @@ class AuthServices implements IAuthServices
                 'success' => false,
                 'message' => $exception->getMessage(),
                 'code' => "442"
+            ];
+        }
+    }
+    public function logout(User $user)
+    {
+        try {
+            $this->AuthRepository->revokeToken($user);
+
+            return [
+                'success' => true,
+                'message' => 'Token revoked successfully'
+            ];
+        } catch (Exception $ex) {
+            return [
+                'success' => false,
+                'message' => $ex->getMessage()
             ];
         }
     }

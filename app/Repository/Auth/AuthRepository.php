@@ -57,6 +57,7 @@ class AuthRepository implements IAuthRepository
             'access_token' => $tokenResult->accessToken
         ];
     }
+
     public function createUser(DTOsRegister $registerDTO): User
     {
         return User::create([
@@ -65,5 +66,18 @@ class AuthRepository implements IAuthRepository
             'password' => Hash::make($registerDTO->getPassword()),
             'role' => $registerDTO->getRole(),
         ]);
+    }
+
+    public function revokeToken(User $user): bool
+    {
+        // Revoca el token actual del usuario
+        $token = $user->token();
+
+        if ($token) {
+            $token->revoke();
+            return true;
+        }
+
+        return false;
     }
 }
