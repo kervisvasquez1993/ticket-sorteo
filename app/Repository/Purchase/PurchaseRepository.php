@@ -640,6 +640,11 @@ class PurchaseRepository implements IPurchaseRepository
             $query->where('transaction_id', 'LIKE', '%' . $filters->getTransactionId() . '%');
         }
 
+        // ✨ NUEVO: Filtro por número de ticket
+        if ($filters->getTicketNumber()) {
+            $query->where('ticket_number', 'LIKE', '%' . $filters->getTicketNumber() . '%');
+        }
+
         if ($filters->getDateFrom()) {
             $query->whereDate('created_at', '>=', $filters->getDateFrom());
         }
@@ -655,6 +660,7 @@ class PurchaseRepository implements IPurchaseRepository
                     ->orWhere('payment_reference', 'LIKE', '%' . $search . '%')
                     ->orWhere('email', 'LIKE', '%' . $search . '%')
                     ->orWhere('whatsapp', 'LIKE', '%' . $search . '%')
+                    ->orWhere('ticket_number', 'LIKE', '%' . $search . '%') // ✨ INCLUIR TICKET EN BÚSQUEDA GENERAL
                     ->orWhereHas('user', function ($userQuery) use ($search) {
                         $userQuery->where('name', 'LIKE', '%' . $search . '%')
                             ->orWhere('email', 'LIKE', '%' . $search . '%');

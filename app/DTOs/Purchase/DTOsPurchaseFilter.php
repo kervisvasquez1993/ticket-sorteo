@@ -16,6 +16,7 @@ class DTOsPurchaseFilter
         private readonly ?string $date_from = null,
         private readonly ?string $date_to = null,
         private readonly ?string $search = null,
+        private readonly ?string $ticket_number = null, // ✨ NUEVO
         private readonly ?string $sort_by = 'created_at',
         private readonly ?string $sort_order = 'desc',
         private readonly int $page = 1,
@@ -34,6 +35,7 @@ class DTOsPurchaseFilter
             date_from: $request->get('date_from'),
             date_to: $request->get('date_to'),
             search: $request->get('search'),
+            ticket_number: $request->get('ticket_number'), // ✨ NUEVO
             sort_by: $request->get('sort_by', 'created_at'),
             sort_order: $request->get('sort_order', 'desc'),
             page: (int) $request->get('page', 1),
@@ -53,6 +55,7 @@ class DTOsPurchaseFilter
             'date_from' => $this->date_from,
             'date_to' => $this->date_to,
             'search' => $this->search,
+            'ticket_number' => $this->ticket_number, // ✨ NUEVO
             'sort_by' => $this->sort_by,
             'sort_order' => $this->sort_order,
             'page' => $this->page,
@@ -62,71 +65,26 @@ class DTOsPurchaseFilter
         });
     }
 
-    // Getters
-    public function getUserId(): ?int
+    // ✨ NUEVO GETTER
+    public function getTicketNumber(): ?string
     {
-        return $this->user_id;
+        return $this->ticket_number;
     }
 
-    public function getEventId(): ?int
-    {
-        return $this->event_id;
-    }
-
-    public function getStatus(): ?string
-    {
-        return $this->status;
-    }
-
-    public function getCurrency(): ?string
-    {
-        return $this->currency;
-    }
-
-    public function getPaymentMethodId(): ?int
-    {
-        return $this->payment_method_id;
-    }
-
-    public function getTransactionId(): ?string
-    {
-        return $this->transaction_id;
-    }
-
-    public function getDateFrom(): ?string
-    {
-        return $this->date_from;
-    }
-
-    public function getDateTo(): ?string
-    {
-        return $this->date_to;
-    }
-
-    public function getSearch(): ?string
-    {
-        return $this->search;
-    }
-
-    public function getSortBy(): string
-    {
-        return $this->sort_by;
-    }
-
-    public function getSortOrder(): string
-    {
-        return $this->sort_order;
-    }
-
-    public function getPage(): int
-    {
-        return $this->page;
-    }
-
-    public function getPerPage(): int
-    {
-        return $this->per_page;
-    }
+    // Getters existentes...
+    public function getUserId(): ?int { return $this->user_id; }
+    public function getEventId(): ?int { return $this->event_id; }
+    public function getStatus(): ?string { return $this->status; }
+    public function getCurrency(): ?string { return $this->currency; }
+    public function getPaymentMethodId(): ?int { return $this->payment_method_id; }
+    public function getTransactionId(): ?string { return $this->transaction_id; }
+    public function getDateFrom(): ?string { return $this->date_from; }
+    public function getDateTo(): ?string { return $this->date_to; }
+    public function getSearch(): ?string { return $this->search; }
+    public function getSortBy(): string { return $this->sort_by; }
+    public function getSortOrder(): string { return $this->sort_order; }
+    public function getPage(): int { return $this->page; }
+    public function getPerPage(): int { return $this->per_page; }
 
     // Métodos de utilidad
     public function hasFilters(): bool
@@ -139,7 +97,8 @@ class DTOsPurchaseFilter
                !empty($this->transaction_id) ||
                !empty($this->date_from) ||
                !empty($this->date_to) ||
-               !empty($this->search);
+               !empty($this->search) ||
+               !empty($this->ticket_number); // ✨ NUEVO
     }
 
     public function getValidStatuses(): array
@@ -226,6 +185,11 @@ class DTOsPurchaseFilter
 
         if (!empty($this->search)) {
             $filters['search'] = $this->search;
+        }
+
+        // ✨ NUEVO
+        if (!empty($this->ticket_number)) {
+            $filters['ticket_number'] = $this->ticket_number;
         }
 
         return $filters;
