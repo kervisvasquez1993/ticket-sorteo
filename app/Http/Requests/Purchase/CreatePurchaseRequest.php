@@ -15,6 +15,15 @@ class CreatePurchaseRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation()
+    {
+        if ($this->has('specific_numbers') && is_string($this->specific_numbers)) {
+            $this->merge([
+                'specific_numbers' => json_decode($this->specific_numbers, true)
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -67,25 +76,110 @@ class CreatePurchaseRequest extends FormRequest
                 'max:100',
             ],
             'currency' => [
-                'nullable',
+                'required',
                 'string',
-                Rule::in(['USD', 'BS']),
+                Rule::in(['USD', 'VES']),
+                function ($attribute, $value, $fail) {
+                    $paymentMethodId = $this->input('payment_method_id');
+
+                    if (!$paymentMethodId) {
+                        return;
+                    }
+
+                    $paymentMethod = \App\Models\PaymentMethod::find($paymentMethodId);
+
+                    if (!$paymentMethod) {
+                        return;
+                    }
+
+                    // Definir qué monedas acepta cada tipo de método de pago
+                    $allowedCurrencies = [
+                        'pago_movil' => ['VES'],
+                        'zelle' => ['USD'],
+                        'binance' => ['USD'],
+                        // Agrega más tipos según tu sistema
+                    ];
+
+                    $methodType = $paymentMethod->type;
+
+                    if (isset($allowedCurrencies[$methodType])) {
+                        if (!in_array($value, $allowedCurrencies[$methodType])) {
+                            $allowed = implode(' o ', $allowedCurrencies[$methodType]);
+                            $methodName = $paymentMethod->name;
+                            $fail("El método de pago '{$methodName}' solo acepta pagos en {$allowed}. Por favor, selecciona un precio en la moneda correcta.");
+                        }
+                    }
+                },
             ],
             'specific_numbers' => [
                 'nullable',
                 'array',
                 'max:100',
+                function ($attribute, $value, $fail) {
+                    if (!is_array($value) || empty($value)) {
+                        return;
+                    }
+
+                    $eventId = $this->input('event_id');
+                    if (!$eventId) {
+                        return;
+                    }
+
+                    $event = \App\Models\Event::find($eventId);
+                    if (!$event) {
+                        return;
+                    }
+
+                    $errors = [];
+                    $outOfRange = [];
+                    $alreadyReserved = [];
+
+                    // Verificar números duplicados en la misma solicitud
+                    $duplicates = array_diff_assoc($value, array_unique($value));
+                    if (!empty($duplicates)) {
+                        $fail('No puedes seleccionar el mismo número dos veces.');
+                        return;
+                    }
+
+                    foreach ($value as $ticketNumber) {
+                        // Verificar que sea un número entero
+                        if (!is_int($ticketNumber)) {
+                            $fail('Todos los números de ticket deben ser números enteros.');
+                            return;
+                        }
+
+                        // Verificar rango
+                        if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
+                            $outOfRange[] = $ticketNumber;
+                            continue;
+                        }
+
+                        // Verificar si está reservado
+                        $isUsed = \App\Models\Purchase::where('event_id', $eventId)
+                            ->where('ticket_number', $ticketNumber)
+                            ->exists();
+
+                        if ($isUsed) {
+                            $alreadyReserved[] = $ticketNumber;
+                        }
+                    }
+
+                    // Reportar errores consolidados
+                    if (!empty($outOfRange)) {
+                        $numbers = implode(', ', $outOfRange);
+                        $fail("Los siguientes números están fuera del rango del evento ({$event->start_number} - {$event->end_number}): {$numbers}");
+                        return;
+                    }
+
+                    if (!empty($alreadyReserved)) {
+                        $numbers = implode(', ', $alreadyReserved);
+                        $fail("Los siguientes números ya están reservados: {$numbers}. Por favor, selecciona otros números.");
+                        return;
+                    }
+                },
             ],
             'specific_numbers.*' => [
                 'integer',
-                function ($attribute, $value, $fail) {
-                    if ($this->input('event_id')) {
-                        $event = \App\Models\Event::find($this->input('event_id'));
-                        if ($event && ($value < $event->start_number || $value > $event->end_number)) {
-                            $fail("El número {$value} está fuera del rango del evento.");
-                        }
-                    }
-                },
             ],
             'payment_reference' => [
                 'nullable',
@@ -98,7 +192,6 @@ class CreatePurchaseRequest extends FormRequest
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
             ],
-            // ✅ Nuevas validaciones
             'email' => [
                 'required',
                 'email:rfc,dns',
@@ -107,7 +200,7 @@ class CreatePurchaseRequest extends FormRequest
             'whatsapp' => [
                 'required',
                 'string',
-                'regex:/^\+?[1-9]\d{1,14}$/', // Formato E.164 internacional
+                'regex:/^\+?[1-9]\d{1,14}$/',
                 'max:20',
             ],
         ];
@@ -123,11 +216,14 @@ class CreatePurchaseRequest extends FormRequest
             'quantity.required' => 'La cantidad es obligatoria.',
             'quantity.min' => 'Debe comprar al menos 1 ticket.',
             'quantity.max' => 'Solo puede comprar hasta 100 tickets por vez.',
+            'currency.required' => 'La moneda es obligatoria.',
+            'currency.in' => 'La moneda debe ser USD o VES.',
+            'specific_numbers.max' => 'No puedes seleccionar más de 100 números a la vez.',
+            'specific_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
             'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
-            // ✅ Nuevos mensajes
             'email.required' => 'El correo electrónico es obligatorio.',
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
@@ -139,13 +235,10 @@ class CreatePurchaseRequest extends FormRequest
 
     public function failedValidation(Validator $validator)
     {
-        throw new HttpResponseException(response()->json(
-            [
-                'message' => 'Validation errors',
-                'data' => $validator->errors()
-            ],
-            422
-        ));
+        throw new HttpResponseException(response()->json([
+            'message' => 'Validation errors',
+            'data' => $validator->errors()
+        ], 422));
     }
 
     protected function failedAuthorization()

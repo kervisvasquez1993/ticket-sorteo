@@ -31,6 +31,18 @@ class CreateAdminPurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:events,id',
+                function ($attribute, $value, $fail) {
+                    $event = \App\Models\Event::find($value);
+                    if ($event && $event->status !== 'active') {
+                        $fail('El evento no está activo para compras.');
+                    }
+                    if ($event && now()->lt($event->start_date)) {
+                        $fail('El evento aún no ha comenzado.');
+                    }
+                    if ($event && now()->gt($event->end_date)) {
+                        $fail('El evento ya ha finalizado.');
+                    }
+                },
             ],
             'event_price_id' => [
                 'required',
@@ -38,6 +50,9 @@ class CreateAdminPurchaseRequest extends FormRequest
                 'exists:event_prices,id',
                 function ($attribute, $value, $fail) {
                     $eventPrice = \App\Models\EventPrice::find($value);
+                    if ($eventPrice && !$eventPrice->is_active) {
+                        $fail('El precio seleccionado no está disponible.');
+                    }
                     if ($eventPrice && $this->input('event_id') && $eventPrice->event_id != $this->input('event_id')) {
                         $fail('El precio no corresponde al evento seleccionado.');
                     }
@@ -47,39 +62,119 @@ class CreateAdminPurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:payment_methods,id',
+                function ($attribute, $value, $fail) {
+                    $paymentMethod = \App\Models\PaymentMethod::find($value);
+                    if ($paymentMethod && !$paymentMethod->is_active) {
+                        $fail('El método de pago seleccionado no está disponible.');
+                    }
+                },
             ],
             'ticket_numbers' => [
                 'required',
                 'array',
                 'min:1',
                 'max:50',
+                function ($attribute, $value, $fail) {
+                    if (!is_array($value)) {
+                        return;
+                    }
+
+                    $eventId = $this->input('event_id');
+                    if (!$eventId) {
+                        return;
+                    }
+
+                    $event = \App\Models\Event::find($eventId);
+                    if (!$event) {
+                        return;
+                    }
+
+                    $outOfRange = [];
+                    $alreadyReserved = [];
+
+                    // Verificar números duplicados en la misma solicitud
+                    $duplicates = array_diff_assoc($value, array_unique($value));
+                    if (!empty($duplicates)) {
+                        $fail('No puedes seleccionar el mismo número dos veces.');
+                        return;
+                    }
+
+                    foreach ($value as $ticketNumber) {
+                        // Verificar que sea un número entero
+                        if (!is_int($ticketNumber)) {
+                            $fail('Todos los números de ticket deben ser números enteros.');
+                            return;
+                        }
+
+                        // Verificar rango
+                        if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
+                            $outOfRange[] = $ticketNumber;
+                            continue;
+                        }
+
+                        // Verificar si está reservado
+                        $isUsed = \App\Models\Purchase::where('event_id', $eventId)
+                            ->where('ticket_number', $ticketNumber)
+                            ->exists();
+
+                        if ($isUsed) {
+                            $alreadyReserved[] = $ticketNumber;
+                        }
+                    }
+
+                    // Reportar errores consolidados
+                    if (!empty($outOfRange)) {
+                        $numbers = implode(', ', $outOfRange);
+                        $fail("Los siguientes números están fuera del rango del evento ({$event->start_number} - {$event->end_number}): {$numbers}");
+                        return;
+                    }
+
+                    if (!empty($alreadyReserved)) {
+                        $numbers = implode(', ', $alreadyReserved);
+                        $fail("Los siguientes números ya están reservados: {$numbers}. Por favor, selecciona otros números.");
+                        return;
+                    }
+                },
             ],
             'ticket_numbers.*' => [
                 'required',
                 'integer',
-                'distinct',
+            ],
+            'currency' => [
+                'required',
+                'string',
+                Rule::in(['USD', 'VES']),
                 function ($attribute, $value, $fail) {
-                    if ($this->input('event_id')) {
-                        $event = \App\Models\Event::find($this->input('event_id'));
+                    $paymentMethodId = $this->input('payment_method_id');
 
-                        if ($event && ($value < $event->start_number || $value > $event->end_number)) {
-                            $fail("El número {$value} está fuera del rango del evento ({$event->start_number} - {$event->end_number}).");
-                        }
+                    if (!$paymentMethodId) {
+                        return;
+                    }
 
-                        $isUsed = \App\Models\Purchase::where('event_id', $this->input('event_id'))
-                            ->where('ticket_number', $value)
-                            ->exists();
+                    $paymentMethod = \App\Models\PaymentMethod::find($paymentMethodId);
 
-                        if ($isUsed) {
-                            $fail("El número {$value} ya está reservado.");
+                    if (!$paymentMethod) {
+                        return;
+                    }
+
+                    // Definir qué monedas acepta cada tipo de método de pago
+                    $allowedCurrencies = [
+                        'pago_movil' => ['VES'],
+                        'zelle' => ['USD'],
+                        'binance' => ['USD'],
+                        // Agrega más tipos según tu sistema
+                    ];
+
+                    $methodType = $paymentMethod->type;
+
+                    if (isset($allowedCurrencies[$methodType])) {
+                        if (!in_array($value, $allowedCurrencies[$methodType])) {
+                            $allowed = implode(' o ', $allowedCurrencies[$methodType]);
+                            $methodName = $paymentMethod->name;
+                            $fail("El método de pago '{$methodName}' solo acepta pagos en {$allowed}. Por favor, selecciona un precio en la moneda correcta.");
                         }
                     }
                 },
-            ],
-            'currency' => [
-                'nullable',
-                'string',
-                Rule::in(['USD', 'BS']),
             ],
             'payment_reference' => [
                 'nullable',
@@ -121,14 +216,19 @@ class CreateAdminPurchaseRequest extends FormRequest
             'ticket_numbers.array' => 'Los números de ticket deben ser un array válido.',
             'ticket_numbers.min' => 'Debes seleccionar al menos un número de ticket.',
             'ticket_numbers.max' => 'No puedes seleccionar más de 50 números a la vez.',
+            'ticket_numbers.*.required' => 'Todos los números de ticket son obligatorios.',
             'ticket_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
-            'ticket_numbers.*.distinct' => 'No puedes seleccionar el mismo número dos veces.',
+            'currency.required' => 'La moneda es obligatoria.',
+            'currency.in' => 'La moneda debe ser USD o VES.',
             'email.required' => 'El correo electrónico es obligatorio.',
             'email.email' => 'El correo electrónico debe ser válido.',
+            'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
             'whatsapp.required' => 'El número de WhatsApp es obligatorio.',
-            'whatsapp.regex' => 'El formato del número de WhatsApp no es válido.',
+            'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
+            'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
+            'auto_approve.boolean' => 'El campo auto_approve debe ser verdadero o falso.',
         ];
     }
 

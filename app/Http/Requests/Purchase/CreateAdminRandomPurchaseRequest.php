@@ -12,7 +12,7 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-               return Auth::check() && Auth::user()->isAdmin();
+        return Auth::check() && Auth::user()->isAdmin();
     }
 
     public function rules(): array
@@ -22,6 +22,18 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:events,id',
+                function ($attribute, $value, $fail) {
+                    $event = \App\Models\Event::find($value);
+                    if ($event && $event->status !== 'active') {
+                        $fail('El evento no está activo para compras.');
+                    }
+                    if ($event && now()->lt($event->start_date)) {
+                        $fail('El evento aún no ha comenzado.');
+                    }
+                    if ($event && now()->gt($event->end_date)) {
+                        $fail('El evento ya ha finalizado.');
+                    }
+                },
             ],
             'event_price_id' => [
                 'required',
@@ -29,6 +41,9 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
                 'exists:event_prices,id',
                 function ($attribute, $value, $fail) {
                     $eventPrice = \App\Models\EventPrice::find($value);
+                    if ($eventPrice && !$eventPrice->is_active) {
+                        $fail('El precio seleccionado no está disponible.');
+                    }
                     if ($eventPrice && $this->input('event_id') && $eventPrice->event_id != $this->input('event_id')) {
                         $fail('El precio no corresponde al evento seleccionado.');
                     }
@@ -38,6 +53,12 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:payment_methods,id',
+                function ($attribute, $value, $fail) {
+                    $paymentMethod = \App\Models\PaymentMethod::find($value);
+                    if ($paymentMethod && !$paymentMethod->is_active) {
+                        $fail('El método de pago seleccionado no está disponible.');
+                    }
+                },
             ],
             'quantity' => [
                 'required',
@@ -46,17 +67,48 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
                 'max:100',
             ],
             'currency' => [
-                'nullable',
+                'required',
                 'string',
-                Rule::in(['USD', 'BS']),
+                Rule::in(['USD', 'VES']),
+                function ($attribute, $value, $fail) {
+                    $paymentMethodId = $this->input('payment_method_id');
+
+                    if (!$paymentMethodId) {
+                        return;
+                    }
+
+                    $paymentMethod = \App\Models\PaymentMethod::find($paymentMethodId);
+
+                    if (!$paymentMethod) {
+                        return;
+                    }
+
+                    // Definir qué monedas acepta cada tipo de método de pago
+                    $allowedCurrencies = [
+                        'pago_movil' => ['VES'],
+                        'zelle' => ['USD'],
+                        'binance' => ['USD'],
+                        // Agrega más tipos según tu sistema
+                    ];
+
+                    $methodType = $paymentMethod->type;
+
+                    if (isset($allowedCurrencies[$methodType])) {
+                        if (!in_array($value, $allowedCurrencies[$methodType])) {
+                            $allowed = implode(' o ', $allowedCurrencies[$methodType]);
+                            $methodName = $paymentMethod->name;
+                            $fail("El método de pago '{$methodName}' solo acepta pagos en {$allowed}. Por favor, selecciona un precio en la moneda correcta.");
+                        }
+                    }
+                },
             ],
             'payment_reference' => [
-                'nullable', // ✅ Opcional para admin
+                'nullable',
                 'string',
                 'max:255',
             ],
             'payment_proof_url' => [
-                'nullable', // ✅ Opcional para admin
+                'nullable', // ✅ OPCIONAL para admin
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
@@ -89,12 +141,17 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
             'quantity.required' => 'La cantidad es obligatoria.',
             'quantity.min' => 'Debe comprar al menos 1 ticket.',
             'quantity.max' => 'Solo puede comprar hasta 100 tickets por vez.',
+            'currency.required' => 'La moneda es obligatoria.',
+            'currency.in' => 'La moneda debe ser USD o VES.',
             'email.required' => 'El correo electrónico es obligatorio.',
             'email.email' => 'El correo electrónico debe ser válido.',
+            'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
             'whatsapp.required' => 'El número de WhatsApp es obligatorio.',
-            'whatsapp.regex' => 'El formato del número de WhatsApp no es válido.',
+            'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
+            'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
+            'auto_approve.boolean' => 'El campo auto_approve debe ser verdadero o falso.',
         ];
     }
 

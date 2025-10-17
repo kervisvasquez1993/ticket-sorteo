@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->name('login');
+Route::post('/test', [AuthController::class, 'test'])->name('test');
 Route::post('/register', [AuthController::class, 'register'])->name('register');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth:api');
 Route::post('purchases', [PurchaseController::class, 'store']);
@@ -24,38 +25,22 @@ Route::middleware('auth:api')->group(function () {
 
 
     Route::prefix('notifications')->group(function () {
-        // Obtener todas las notificaciones (paginadas)
         Route::get('/', [NotificationController::class, 'index']);
-
-        // Obtener solo no leídas
         Route::get('/unread', [NotificationController::class, 'unread']);
-
-        // Obtener conteo de no leídas
         Route::get('/unread/count', [NotificationController::class, 'unreadCount']);
-
-        // Ver una notificación específica
         Route::get('/{id}', [NotificationController::class, 'show']);
-
-        // Marcar una como leída
         Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
-
-        // Marcar todas como leídas
         Route::patch('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-
-        // Eliminar una notificación
         Route::delete('/{id}', [NotificationController::class, 'destroy']);
-
-        // Eliminar todas las leídas
         Route::delete('/clear/read', [NotificationController::class, 'clearRead']);
     });
     Route::prefix('purchases')->group(function () {
-        // Rutas específicas
+        Route::post('admin', [PurchaseController::class, 'storeAdmin']);
+        Route::post('admin/random', [PurchaseController::class, 'storeAdminRandom']);
         Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
         Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
         Route::patch('{transactionId}/approve', [PurchaseController::class, 'approve']);
         Route::patch('{transactionId}/reject', [PurchaseController::class, 'reject']);
-        Route::post('admin', [PurchaseController::class, 'storeAdmin']);
-        Route::post('admin/random', [PurchaseController::class, 'storeAdminRandom']);
     });
 
     Route::get('purchases', [PurchaseController::class, 'index']);
