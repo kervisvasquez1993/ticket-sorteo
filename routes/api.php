@@ -45,9 +45,6 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('purchases', [PurchaseController::class, 'index']);
     Route::get('purchases/event/{eventId}', [PurchaseController::class, 'getPurchasesByEvent']);
-
-
-
     Route::prefix('payment-methods')->group(function () {
 
         Route::middleware(['admin'])->group(function () {
@@ -61,7 +58,6 @@ Route::middleware('auth:api')->group(function () {
     });
     Route::middleware('admin')->group(function () {
         Route::get('purchases/summary/{transactionId}', [PurchaseController::class, 'purchaseSummary']);
-
         Route::get('events/{id}/statistics', [EventController::class, 'statistics']);
         Route::get('events/{id}/check-number/{number}', [EventController::class, 'checkNumber']);
         Route::get('events/{id}/occupied-numbers', [EventController::class, 'occupiedNumbers']);
@@ -69,8 +65,6 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/events', [EventController::class, 'index']);
         Route::post('/events', [EventController::class, 'store']);
         Route::post('/events-prices', [EventPriceController::class, 'store']);
-
-
         Route::get('/events/{id}', [EventController::class, 'show']);
         Route::put('/events/{id}', [EventController::class, 'update']);
         Route::delete('/events/{id}', [EventController::class, 'destroy']);

@@ -293,6 +293,7 @@ class EventRepository implements IEventRepository
         return array_values($availableNumbers);
     }
 
+
     public function selectWinner(Event $event, int $winnerNumber): object
     {
         // Buscar la compra con el número ganador (puede no existir)
@@ -347,6 +348,58 @@ class EventRepository implements IEventRepository
                 'name' => $event->name,
                 'status' => $event->status,
             ]
+        ];
+    }
+
+    /**
+     * ✅ NUEVO: Obtener detalles completos del ganador
+     */
+    public function getWinnerDetails(Event $event): ?array
+    {
+        if (!$event->winner_number) {
+            return null;
+        }
+
+        // Buscar la compra con el número ganador
+        $winningPurchase = $event->purchases()
+            ->where('ticket_number', $event->winner_number)
+            ->with('user')
+            ->first();
+
+        // Si existe una compra asociada al número
+        if ($winningPurchase) {
+            return [
+                'winner_number' => $event->winner_number,
+                'has_purchase' => true,
+                'purchase_status' => $winningPurchase->status,
+                'winner_name' => $winningPurchase->getCustomerName(),
+                'winner_email' => $winningPurchase->getCustomerEmail(),
+                'winner_whatsapp' => $winningPurchase->getCustomerWhatsapp(),
+                'is_authenticated' => $winningPurchase->hasAuthenticatedUser(),
+                'user_id' => $winningPurchase->user_id,
+                'purchase_date' => $winningPurchase->created_at->toISOString(),
+                'amount_paid' => floatval($winningPurchase->amount),
+                'currency' => $winningPurchase->currency,
+                'transaction_id' => $winningPurchase->transaction_id,
+                'qr_code_url' => $winningPurchase->qr_code_url,
+            ];
+        }
+
+        // Si NO existe compra para ese número (número sin comprador)
+        return [
+            'winner_number' => $event->winner_number,
+            'has_purchase' => false,
+            'purchase_status' => null,
+            'winner_name' => 'Número sin comprador',
+            'winner_email' => null,
+            'winner_whatsapp' => null,
+            'is_authenticated' => false,
+            'user_id' => null,
+            'purchase_date' => null,
+            'amount_paid' => null,
+            'currency' => null,
+            'transaction_id' => null,
+            'qr_code_url' => null,
         ];
     }
 }

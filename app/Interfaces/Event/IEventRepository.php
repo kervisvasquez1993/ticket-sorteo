@@ -16,4 +16,5 @@ interface IEventRepository
     public function deleteEvent(Event $Event): Event;
     public function getAvailableNumbers(Event $event): array;
     public function selectWinner(Event $event, int $winnerNumber): ?object;
+    public function getWinnerDetails(Event $event): ?array;
 }
