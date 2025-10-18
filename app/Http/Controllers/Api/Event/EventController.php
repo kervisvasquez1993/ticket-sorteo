@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Event;
 use App\DTOs\Event\DTOsEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Event\CreateEventRequest;
+use App\Http\Requests\Event\SelectWinnerRequest;
 use App\Http\Requests\Event\UpdateEventRequest;
 use App\Interfaces\Event\IEventServices;
 use App\Models\Event;
@@ -105,17 +106,23 @@ class EventController extends Controller
     /**
      * Select winner for event (Admin only)
      */
-    public function selectWinner(string $id)
+    public function selectWinner(SelectWinnerRequest $request, string $id)
     {
-        if (!auth()->user()->isAdmin()) {
-            return response()->json(['error' => 'No autorizado'], 403);
+        $result = $this->eventServices->selectWinner(
+            $id,
+            $request->validated()['winner_number']
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'message' => $result['message']
+            ], 422);
         }
 
-        $result = $this->eventServices->selectWinner($id);
-        if (!$result['success']) {
-            return response()->json(['error' => $result['message']], 422);
-        }
-        return response()->json($result['data'], 200);
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
     }
 
     /**

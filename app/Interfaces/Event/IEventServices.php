@@ -14,5 +14,5 @@ interface IEventServices
     public function updateEvent(DTOsEvent $data, $id);
     public function deleteEvent($id);
     public function getAvailableNumbers($eventId);
-    public function selectWinner($eventId);
+   public function selectWinner($eventId, int $winnerNumber);
 }

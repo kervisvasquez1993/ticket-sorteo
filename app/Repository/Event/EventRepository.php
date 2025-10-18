@@ -293,28 +293,41 @@ class EventRepository implements IEventRepository
         return array_values($availableNumbers);
     }
 
-    public function selectWinner(Event $event): ?object
+    public function selectWinner(Event $event, int $winnerNumber): ?object
     {
-        // Seleccionar un ticket ganador aleatorio
+        // Buscar la compra con el número ganador
         $winningPurchase = $event->purchases()
             ->where('status', 'completed')
-            ->inRandomOrder()
+            ->where('ticket_number', $winnerNumber)
+            ->with('user') // Puede ser null para guests
             ->first();
 
-        if ($winningPurchase) {
-            // Actualizar el evento con el número ganador
-            $event->update([
-                'winner_number' => $winningPurchase->ticket_number,
-                'status' => 'completed'
-            ]);
-
-            return (object)[
-                'winner_number' => $winningPurchase->ticket_number,
-                'winner_user' => $winningPurchase->user,
-                'purchase' => $winningPurchase
-            ];
+        if (!$winningPurchase) {
+            return null;
         }
 
-        return null;
+        // Actualizar el evento
+        $event->update([
+            'winner_number' => $winningPurchase->ticket_number,
+            'status' => 'completed'
+        ]);
+
+        // Retornar información completa del ganador
+        return (object)[
+            'winner_number' => $winningPurchase->ticket_number,
+            'winner_name' => $winningPurchase->getCustomerName(),
+            'winner_email' => $winningPurchase->getCustomerEmail(),
+            'winner_whatsapp' => $winningPurchase->getCustomerWhatsapp(),
+            'is_authenticated' => $winningPurchase->hasAuthenticatedUser(),
+            'user_id' => $winningPurchase->user_id,
+            'purchase_date' => $winningPurchase->created_at,
+            'amount_paid' => $winningPurchase->amount,
+            'currency' => $winningPurchase->currency,
+            'event' => [
+                'id' => $event->id,
+                'name' => $event->name,
+                'status' => $event->status,
+            ]
+        ];
     }
 }

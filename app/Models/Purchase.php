@@ -59,6 +59,66 @@ class Purchase extends Model
     }
 
     // ====================================================================
+    // MÉTODOS PARA IDENTIFICAR AL COMPRADOR (NUEVOS - AGREGAR ESTOS)
+    // ====================================================================
+
+    /**
+     * Verifica si la compra tiene un usuario autenticado
+     */
+    public function hasAuthenticatedUser(): bool
+    {
+        return !is_null($this->user_id);
+    }
+
+    /**
+     * Obtiene el nombre del comprador (autenticado o guest)
+     */
+    public function getCustomerName(): string
+    {
+        // Si tiene usuario autenticado, usa el nombre del usuario
+        if ($this->hasAuthenticatedUser() && $this->user) {
+            return $this->user->name;
+        }
+
+        // Si no tiene usuario, extrae el nombre del email
+        if ($this->email) {
+            return explode('@', $this->email)[0];
+        }
+
+        return 'Cliente';
+    }
+
+    /**
+     * Obtiene el email del comprador
+     */
+    public function getCustomerEmail(): string
+    {
+        return $this->email;
+    }
+
+    /**
+     * Obtiene el whatsapp del comprador
+     */
+    public function getCustomerWhatsapp(): string
+    {
+        return $this->whatsapp;
+    }
+
+    /**
+     * Obtiene información completa del comprador
+     */
+    public function getCustomerInfo(): array
+    {
+        return [
+            'name' => $this->getCustomerName(),
+            'email' => $this->getCustomerEmail(),
+            'whatsapp' => $this->getCustomerWhatsapp(),
+            'is_authenticated' => $this->hasAuthenticatedUser(),
+            'user_id' => $this->user_id,
+        ];
+    }
+
+    // ====================================================================
     // QUERY SCOPES - OPTIMIZADOS PARA POSTGRESQL
     // ====================================================================
 

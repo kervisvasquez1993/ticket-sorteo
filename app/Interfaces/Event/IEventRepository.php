@@ -15,5 +15,5 @@ interface IEventRepository
     public function updateEvent(DTOsEvent $data, Event $Event): Event;
     public function deleteEvent(Event $Event): Event;
     public function getAvailableNumbers(Event $event): array;
-    public function selectWinner(Event $event): ?object;
+    public function selectWinner(Event $event, int $winnerNumber): ?object;
 }
