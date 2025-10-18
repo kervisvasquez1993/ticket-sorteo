@@ -119,4 +119,14 @@ class EventPriceRepository implements IEventPriceRepository
             $firstActivePrice->update(['is_default' => true]);
         }
     }
+    public function setAsDefault(EventPrice $eventPrice): EventPrice
+    {
+        // Remover el default de otros precios del mismo evento
+        $this->removeDefaultFromEvent($eventPrice->event_id, $eventPrice->id);
+
+        // Marcar este precio como default
+        $eventPrice->update(['is_default' => true]);
+
+        return $eventPrice->fresh();
+    }
 }

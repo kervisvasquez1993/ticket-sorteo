@@ -6,6 +6,7 @@ use App\DTOs\EventPrice\DTOsEventPrice;
 use App\DTOs\EventPrice\DTOsEventPriceFilter;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EventPrice\CreateEventPriceRequest;
+use App\Http\Requests\EventPrice\SetDefaultEventPriceRequest;
 use App\Http\Requests\EventPrice\UpdateEventPriceRequest;
 use App\Interfaces\EventPrice\IEventPriceServices;
 use Illuminate\Http\Request;
@@ -103,6 +104,18 @@ class EventPriceController extends Controller
                 'error' => $result['message']
             ], 422);
         }
+        return response()->json($result['data'], 200);
+    }
+    public function setAsDefault(SetDefaultEventPriceRequest $request, $id)
+    {
+        $result = $this->EventPriceServices->setAsDefault($id);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
         return response()->json($result['data'], 200);
     }
 }

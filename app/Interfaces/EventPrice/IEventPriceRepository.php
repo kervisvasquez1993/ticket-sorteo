@@ -16,4 +16,5 @@ interface IEventPriceRepository
     public function countEventPrices(int $eventId): int;
     public function removeDefaultFromEvent(int $eventId, ?int $exceptId = null): void;
     public function assignDefaultToFirstActive(int $eventId): void;
+     public function setAsDefault(EventPrice $eventPrice): EventPrice;
 }

@@ -173,4 +173,30 @@ class EventPriceServices implements IEventPriceServices
             ];
         }
     }
+    public function setAsDefault($id)
+    {
+        try {
+            DB::beginTransaction();
+
+            $eventPrice = $this->EventPriceRepository->getEventPriceById($id);
+
+            // El Request ya validó todo, solo ejecutamos la lógica
+            $result = $this->EventPriceRepository->setAsDefault($eventPrice);
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'message' => 'Precio establecido como predeterminado exitosamente',
+                'data' => $result
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+
+            return [
+                'success' => false,
+                'message' => 'Error al establecer precio predeterminado: ' . $exception->getMessage()
+            ];
+        }
+    }
 }

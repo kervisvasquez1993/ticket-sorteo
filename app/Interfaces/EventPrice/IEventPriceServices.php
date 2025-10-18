@@ -12,4 +12,5 @@ interface IEventPriceServices
     public function createEventPrice(DTOsEventPrice $data);
     public function updateEventPrice(DTOsEventPrice $data, $id);
     public function deleteEventPrice($id);
+    public function setAsDefault($id);
 }
