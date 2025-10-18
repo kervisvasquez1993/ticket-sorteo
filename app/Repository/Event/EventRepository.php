@@ -293,36 +293,55 @@ class EventRepository implements IEventRepository
         return array_values($availableNumbers);
     }
 
-    public function selectWinner(Event $event, int $winnerNumber): ?object
+    public function selectWinner(Event $event, int $winnerNumber): object
     {
-        // Buscar la compra con el número ganador
+        // Buscar la compra con el número ganador (puede no existir)
         $winningPurchase = $event->purchases()
-            ->where('status', 'completed')
             ->where('ticket_number', $winnerNumber)
             ->with('user') // Puede ser null para guests
             ->first();
 
-        if (!$winningPurchase) {
-            return null;
-        }
-
-        // Actualizar el evento
+        // Actualizar el evento con el número ganador
         $event->update([
-            'winner_number' => $winningPurchase->ticket_number,
+            'winner_number' => $winnerNumber,
             'status' => 'completed'
         ]);
 
-        // Retornar información completa del ganador
+        // Si existe una compra asociada al número
+        if ($winningPurchase) {
+            return (object)[
+                'winner_number' => $winnerNumber,
+                'has_purchase' => true,
+                'purchase_status' => $winningPurchase->status,
+                'winner_name' => $winningPurchase->getCustomerName(),
+                'winner_email' => $winningPurchase->getCustomerEmail(),
+                'winner_whatsapp' => $winningPurchase->getCustomerWhatsapp(),
+                'is_authenticated' => $winningPurchase->hasAuthenticatedUser(),
+                'user_id' => $winningPurchase->user_id,
+                'purchase_date' => $winningPurchase->created_at,
+                'amount_paid' => $winningPurchase->amount,
+                'currency' => $winningPurchase->currency,
+                'event' => [
+                    'id' => $event->id,
+                    'name' => $event->name,
+                    'status' => $event->status,
+                ]
+            ];
+        }
+
+        // Si NO existe compra para ese número (número sin comprador)
         return (object)[
-            'winner_number' => $winningPurchase->ticket_number,
-            'winner_name' => $winningPurchase->getCustomerName(),
-            'winner_email' => $winningPurchase->getCustomerEmail(),
-            'winner_whatsapp' => $winningPurchase->getCustomerWhatsapp(),
-            'is_authenticated' => $winningPurchase->hasAuthenticatedUser(),
-            'user_id' => $winningPurchase->user_id,
-            'purchase_date' => $winningPurchase->created_at,
-            'amount_paid' => $winningPurchase->amount,
-            'currency' => $winningPurchase->currency,
+            'winner_number' => $winnerNumber,
+            'has_purchase' => false,
+            'purchase_status' => null,
+            'winner_name' => 'Número sin comprador',
+            'winner_email' => null,
+            'winner_whatsapp' => null,
+            'is_authenticated' => false,
+            'user_id' => null,
+            'purchase_date' => null,
+            'amount_paid' => null,
+            'currency' => null,
             'event' => [
                 'id' => $event->id,
                 'name' => $event->name,

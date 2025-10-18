@@ -310,51 +310,42 @@ class EventServices implements IEventServices
     //         ];
     //     }
     // }
-    public function selectWinner($eventId, int $winnerNumber)
-    {
-        try {
-            $event = $this->eventRepository->getEventById($eventId);
+  public function selectWinner($eventId, int $winnerNumber)
+{
+    try {
+        $event = $this->eventRepository->getEventById($eventId);
 
-            // Validar estado del evento
-            if ($event->status === 'completed') {
-                throw new Exception('Este evento ya tiene un ganador');
-            }
-
-            if (!$event->isActive() && $event->status !== 'active') {
-                throw new Exception('El evento debe estar activo para seleccionar un ganador');
-            }
-
-            // Validar que el número esté en el rango permitido
-            if ($winnerNumber < $event->start_number || $winnerNumber > $event->end_number) {
-                throw new Exception(
-                    "El número ganador debe estar entre {$event->start_number} y {$event->end_number}"
-                );
-            }
-
-            // Verificar que el número tenga una compra completada
-            if (!$event->hasCompletedPurchaseForNumber($winnerNumber)) {
-                throw new Exception(
-                    'No existe una compra completada con ese número de ticket'
-                );
-            }
-
-            // Seleccionar ganador
-            $winner = $this->eventRepository->selectWinner($event, $winnerNumber);
-
-            if (!$winner) {
-                throw new Exception('Error al seleccionar el ganador');
-            }
-
-            return [
-                'success' => true,
-                'data' => $winner,
-                'message' => 'Ganador seleccionado exitosamente'
-            ];
-        } catch (Exception $exception) {
-            return [
-                'success' => false,
-                'message' => $exception->getMessage()
-            ];
+        // Validar estado del evento
+        if ($event->status === 'completed') {
+            throw new Exception('Este evento ya tiene un ganador');
         }
+
+        if (!$event->isActive() && $event->status !== 'active') {
+            throw new Exception('El evento debe estar activo para seleccionar un ganador');
+        }
+
+        // Validar que el número esté en el rango permitido
+        if ($winnerNumber < $event->start_number || $winnerNumber > $event->end_number) {
+            throw new Exception(
+                "El número ganador debe estar entre {$event->start_number} y {$event->end_number}"
+            );
+        }
+
+        // ✅ REMOVIDA LA VALIDACIÓN - Ahora permite números sin compra o con compra failed
+
+        // Seleccionar ganador
+        $winner = $this->eventRepository->selectWinner($event, $winnerNumber);
+
+        return [
+            'success' => true,
+            'data' => $winner,
+            'message' => 'Ganador seleccionado exitosamente'
+        ];
+    } catch (Exception $exception) {
+        return [
+            'success' => false,
+            'message' => $exception->getMessage()
+        ];
     }
+}
 }
