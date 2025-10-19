@@ -192,16 +192,28 @@ class CreatePurchaseRequest extends FormRequest
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
             ],
-            'email' => [
+
+            // ✅ IDENTIFICACIÓN: OBLIGATORIA
+            'identificacion' => [
                 'required',
+                'string',
+                'regex:/^[VE]-?\d{7,9}$/i', // Formato: V-12345678 o E-12345678
+                'max:20',
+            ],
+
+            // ✅ EMAIL y WHATSAPP: OPCIONALES pero AL MENOS UNO OBLIGATORIO
+            'email' => [
+                'nullable',
                 'email:rfc,dns',
                 'max:255',
+                'required_without:whatsapp', // ✅ Obligatorio si no viene whatsapp
             ],
             'whatsapp' => [
-                'required',
+                'nullable',
                 'string',
                 'regex:/^\+?[1-9]\d{1,14}$/',
                 'max:20',
+                'required_without:email', // ✅ Obligatorio si no viene email
             ],
         ];
     }
@@ -224,12 +236,20 @@ class CreatePurchaseRequest extends FormRequest
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
-            'email.required' => 'El correo electrónico es obligatorio.',
+
+            // ✅ IDENTIFICACIÓN: OBLIGATORIA
+            'identificacion.required' => 'La cédula de identidad es obligatoria.',
+            'identificacion.regex' => 'La cédula debe tener el formato: V-12345678 o E-12345678',
+            'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
+
+            // ✅ EMAIL y WHATSAPP: Al menos uno obligatorio
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
-            'whatsapp.required' => 'El número de WhatsApp es obligatorio.',
+            'email.required_without' => 'Debes proporcionar al menos un email o un WhatsApp.',
+
             'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
             'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
+            'whatsapp.required_without' => 'Debes proporcionar al menos un WhatsApp o un email.',
         ];
     }
 

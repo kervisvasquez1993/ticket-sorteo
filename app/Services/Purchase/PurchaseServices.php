@@ -2,21 +2,21 @@
 
 namespace App\Services\Purchase;
 
-use App\DTOs\Purchase\DTOsPurchase;
-use App\DTOs\Purchase\DTOsPurchaseFilter;
-use App\Interfaces\Purchase\IPurchaseServices;
-use App\Interfaces\Purchase\IPurchaseRepository;
-use App\Jobs\SendPurchaseNotificationJob;
-use App\Models\Event;
-use App\Models\EventPrice;
-use App\Models\Purchase;
 use Exception;
+use App\Models\Event;
+use App\Models\Purchase;
+use App\Models\EventPrice;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use App\DTOs\Purchase\DTOsPurchase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use SimpleSoftwareIO\QrCode\Facades\QrCode as QrCodeGenerator;
-use Illuminate\Support\Str;
+use App\DTOs\Purchase\DTOsPurchaseFilter;
+use App\Jobs\SendPurchaseNotificationJob;
+use App\Interfaces\Purchase\IPurchaseServices;
 use Illuminate\Validation\ValidationException;
+use App\Interfaces\Purchase\IPurchaseRepository;
+use SimpleSoftwareIO\QrCode\Facades\QrCode as QrCodeGenerator;
 
 class PurchaseServices implements IPurchaseServices
 {
