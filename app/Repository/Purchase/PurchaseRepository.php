@@ -99,6 +99,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id' => $data->getUserId(),
             'email' => $data->getEmail(),
             'whatsapp' => $data->getWhatsapp(),
+            'identificacion' => $data->getIdentificacion(), // ✅ NUEVO
             'currency' => $data->getCurrency(),
             'ticket_number' => $ticketNumber,
             'amount' => $amount,

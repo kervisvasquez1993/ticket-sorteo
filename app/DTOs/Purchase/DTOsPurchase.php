@@ -19,10 +19,11 @@ class DTOsPurchase
         private readonly int $event_price_id,
         private readonly int $payment_method_id,
         private readonly int $quantity,
-        private readonly string $email,           // ✅ Obligatorio
-        private readonly string $whatsapp,        // ✅ Obligatorio
+        private readonly string $identificacion,      // ✅ OBLIGATORIO
+        private readonly ?string $email = null,       // ✅ Opcional
+        private readonly ?string $whatsapp = null,    // ✅ Opcional
         private readonly ?string $currency = null,
-        private readonly ?int $user_id = null,    // ✅ Ahora es opcional
+        private readonly ?int $user_id = null,
         private readonly ?array $specific_numbers = null,
         private readonly ?string $payment_reference = null,
         private readonly ?string $payment_proof_url = null,
@@ -43,19 +44,17 @@ class DTOsPurchase
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
-            email: $validated['email'],
-            whatsapp: $validated['whatsapp'],
+            identificacion: $validated['identificacion'],
+            email: $validated['email'] ?? null,
+            whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
-            user_id: Auth::check() ? Auth::id() : null,  // ✅ Solo si está autenticado
+            user_id: Auth::check() ? Auth::id() : null,
             specific_numbers: $validated['specific_numbers'] ?? null,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,
         );
     }
-
-
-
 
     private static function uploadPaymentProofToS3(CreatePurchaseRequest $request): ?string
     {
@@ -92,8 +91,9 @@ class DTOsPurchase
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
-            email: $validated['email'],
-            whatsapp: $validated['whatsapp'],
+            identificacion: $validated['identificacion'],
+            email: $validated['email'] ?? null,
+            whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::check() ? Auth::id() : null,
             specific_numbers: $validated['specific_numbers'] ?? null,
@@ -103,16 +103,12 @@ class DTOsPurchase
         );
     }
 
-
-
     public static function fromSinglePurchaseRequest(CreateSinglePurchaseRequest $request): self
     {
         $validated = $request->validated();
         $paymentProofUrl = self::uploadPaymentProofToS3Single($request);
 
         $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
-
-        // ✅ Calcular el total según la cantidad de números
         $ticketCount = count($validated['ticket_numbers']);
         $totalAmount = $eventPrice->amount * $ticketCount;
 
@@ -120,12 +116,13 @@ class DTOsPurchase
             event_id: $validated['event_id'],
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
-            quantity: $ticketCount, // ✅ Cantidad de números seleccionados
-            email: $validated['email'],
-            whatsapp: $validated['whatsapp'],
+            quantity: $ticketCount,
+            identificacion: $validated['identificacion'],
+            email: $validated['email'] ?? null,
+            whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::check() ? Auth::id() : null,
-            specific_numbers: $validated['ticket_numbers'], // ✅ Array de números
+            specific_numbers: $validated['ticket_numbers'],
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,
@@ -173,22 +170,23 @@ class DTOsPurchase
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
-            email: $validated['email'],
-            whatsapp: $validated['whatsapp'],
+            identificacion: $validated['identificacion'],
+            email: $validated['email'] ?? null,
+            whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
-            user_id: Auth::id(), // ✅ ID del admin autenticado
-            specific_numbers: null, // ✅ Sin números específicos
+            user_id: Auth::id(),
+            specific_numbers: null,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,
         );
     }
+
     public static function fromAdminPurchaseRequest(CreateAdminPurchaseRequest $request): self
     {
         $validated = $request->validated();
         $paymentProofUrl = null;
 
-        // ✅ Subir comprobante solo si se envía
         if ($request->hasFile('payment_proof_url')) {
             $paymentProofUrl = self::uploadPaymentProofToS3Admin($request);
         }
@@ -202,10 +200,11 @@ class DTOsPurchase
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
             quantity: $ticketCount,
-            email: $validated['email'],
-            whatsapp: $validated['whatsapp'],
+            identificacion: $validated['identificacion'],  // ✅ OBLIGATORIO
+            email: $validated['email'] ?? null,           // ✅ Opcional
+            whatsapp: $validated['whatsapp'] ?? null,     // ✅ Opcional
             currency: $validated['currency'] ?? $eventPrice->currency,
-            user_id: Auth::id(), // ✅ ID del admin autenticado
+            user_id: Auth::id(),
             specific_numbers: $validated['ticket_numbers'],
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
@@ -260,6 +259,7 @@ class DTOsPurchase
             'event_price_id' => $this->event_price_id,
             'payment_method_id' => $this->payment_method_id,
             'quantity' => $this->quantity,
+            'identificacion' => $this->identificacion,  // ✅ Siempre presente
             'email' => $this->email,
             'whatsapp' => $this->whatsapp,
             'currency' => $this->currency,
@@ -276,46 +276,64 @@ class DTOsPurchase
     {
         return $this->event_id;
     }
+
     public function getEventPriceId(): int
     {
         return $this->event_price_id;
     }
+
     public function getPaymentMethodId(): int
     {
         return $this->payment_method_id;
     }
+
     public function getQuantity(): int
     {
         return $this->quantity;
     }
-    public function getEmail(): string
+
+    // ✅ OBLIGATORIO
+    public function getIdentificacion(): string
+    {
+        return $this->identificacion;
+    }
+
+    // ✅ OPCIONALES
+    public function getEmail(): ?string
     {
         return $this->email;
     }
-    public function getWhatsapp(): string
+
+    public function getWhatsapp(): ?string
     {
         return $this->whatsapp;
     }
+
     public function getCurrency(): ?string
     {
         return $this->currency;
     }
+
     public function getUserId(): ?int
     {
         return $this->user_id;
     }
+
     public function getSpecificNumbers(): ?array
     {
         return $this->specific_numbers;
     }
+
     public function getPaymentReference(): ?string
     {
         return $this->payment_reference;
     }
+
     public function getPaymentProofUrl(): ?string
     {
         return $this->payment_proof_url;
     }
+
     public function getTotalAmount(): ?float
     {
         return $this->total_amount;

@@ -83,12 +83,10 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
                         return;
                     }
 
-                    // Definir qué monedas acepta cada tipo de método de pago
                     $allowedCurrencies = [
                         'pago_movil' => ['VES'],
                         'zelle' => ['USD'],
                         'binance' => ['USD'],
-                        // Agrega más tipos según tu sistema
                     ];
 
                     $methodType = $paymentMethod->type;
@@ -108,22 +106,35 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
                 'max:255',
             ],
             'payment_proof_url' => [
-                'nullable', // ✅ OPCIONAL para admin
+                'nullable',
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
             ],
-            'email' => [
+
+            // ✅ IDENTIFICACIÓN: OBLIGATORIA (IGUAL QUE EL OTRO REQUEST)
+            'identificacion' => [
                 'required',
+                'string',
+                'regex:/^[VE]-?\d{7,9}$/i', // Formato: V-12345678 o E-12345678
+                'max:20',
+            ],
+
+            // ✅ EMAIL y WHATSAPP: OPCIONALES pero AL MENOS UNO OBLIGATORIO
+            'email' => [
+                'nullable',
                 'email:rfc,dns',
                 'max:255',
+                'required_without:whatsapp', // ✅ Obligatorio si no viene whatsapp
             ],
             'whatsapp' => [
-                'required',
+                'nullable',
                 'string',
                 'regex:/^\+?[1-9]\d{1,14}$/',
                 'max:20',
+                'required_without:email', // ✅ Obligatorio si no viene email
             ],
+
             'auto_approve' => [
                 'nullable',
                 'boolean',
@@ -143,12 +154,21 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
             'quantity.max' => 'Solo puede comprar hasta 100 tickets por vez.',
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
-            'email.required' => 'El correo electrónico es obligatorio.',
+
+            // ✅ IDENTIFICACIÓN: OBLIGATORIA
+            'identificacion.required' => 'La cédula de identidad es obligatoria.',
+            'identificacion.regex' => 'La cédula debe tener el formato: V-12345678 o E-12345678',
+            'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
+
+            // ✅ EMAIL y WHATSAPP: Al menos uno obligatorio
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
-            'whatsapp.required' => 'El número de WhatsApp es obligatorio.',
+            'email.required_without' => 'Debes proporcionar al menos un email o un WhatsApp.',
+
             'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
             'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
+            'whatsapp.required_without' => 'Debes proporcionar al menos un WhatsApp o un email.',
+
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
             'auto_approve.boolean' => 'El campo auto_approve debe ser verdadero o falso.',

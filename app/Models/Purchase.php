@@ -27,6 +27,7 @@ class Purchase extends Model
         'total_amount',
         'email',
         'whatsapp',
+        'identificacion', // ✅ NUEVO
     ];
 
     protected $casts = [
@@ -59,28 +60,20 @@ class Purchase extends Model
     }
 
     // ====================================================================
-    // MÉTODOS PARA IDENTIFICAR AL COMPRADOR (NUEVOS - AGREGAR ESTOS)
+    // MÉTODOS PARA IDENTIFICAR AL COMPRADOR
     // ====================================================================
 
-    /**
-     * Verifica si la compra tiene un usuario autenticado
-     */
     public function hasAuthenticatedUser(): bool
     {
         return !is_null($this->user_id);
     }
 
-    /**
-     * Obtiene el nombre del comprador (autenticado o guest)
-     */
     public function getCustomerName(): string
     {
-        // Si tiene usuario autenticado, usa el nombre del usuario
         if ($this->hasAuthenticatedUser() && $this->user) {
             return $this->user->name;
         }
 
-        // Si no tiene usuario, extrae el nombre del email
         if ($this->email) {
             return explode('@', $this->email)[0];
         }
@@ -88,31 +81,29 @@ class Purchase extends Model
         return 'Cliente';
     }
 
-    /**
-     * Obtiene el email del comprador
-     */
-    public function getCustomerEmail(): string
+    public function getCustomerEmail(): ?string
     {
         return $this->email;
     }
 
-    /**
-     * Obtiene el whatsapp del comprador
-     */
-    public function getCustomerWhatsapp(): string
+    public function getCustomerWhatsapp(): ?string
     {
         return $this->whatsapp;
     }
 
-    /**
-     * Obtiene información completa del comprador
-     */
+    // ✅ NUEVO: Obtener identificación
+    public function getCustomerIdentificacion(): ?string
+    {
+        return $this->identificacion;
+    }
+
     public function getCustomerInfo(): array
     {
         return [
             'name' => $this->getCustomerName(),
             'email' => $this->getCustomerEmail(),
             'whatsapp' => $this->getCustomerWhatsapp(),
+            'identificacion' => $this->getCustomerIdentificacion(), // ✅ NUEVO
             'is_authenticated' => $this->hasAuthenticatedUser(),
             'user_id' => $this->user_id,
         ];
@@ -122,63 +113,64 @@ class Purchase extends Model
     // QUERY SCOPES - OPTIMIZADOS PARA POSTGRESQL
     // ====================================================================
 
-    /**
-     * Scope: Filtrar por transaction_id (usa el índice)
-     */
     public function scopeByTransaction(Builder $query, string $transactionId): Builder
     {
         return $query->where('transaction_id', $transactionId);
     }
 
-    /**
-     * Scope: Obtener todas las compras de una transacción agrupada
-     */
     public function scopeGroupedByTransaction(Builder $query, string $transactionId): Builder
     {
         return $query->where('transaction_id', $transactionId)
             ->orderBy('ticket_number', 'asc');
     }
 
-    /**
-     * Scope: Filtrar por estado
-     */
     public function scopeByStatus(Builder $query, string $status): Builder
     {
         return $query->where('status', $status);
     }
 
-    /**
-     * Scope: Filtrar por evento
-     */
     public function scopeByEvent(Builder $query, int $eventId): Builder
     {
         return $query->where('event_id', $eventId);
     }
 
-    /**
-     * Scope: Buscar por email o whatsapp (usa índices)
-     */
+    // ✅ NUEVO: Búsqueda optimizada por identificación
+    public function scopeByIdentificacion(Builder $query, string $identificacion): Builder
+    {
+        return $query->where('identificacion', $identificacion);
+    }
+
     public function scopeByContact(Builder $query, ?string $email = null, ?string $whatsapp = null): Builder
     {
         return $query->when($email, fn($q) => $q->where('email', $email))
             ->when($whatsapp, fn($q) => $q->where('whatsapp', $whatsapp));
     }
 
+    // ✅ NUEVO: Búsqueda completa por cualquier dato de contacto
+    public function scopeByAnyContact(Builder $query, ?string $email = null, ?string $whatsapp = null, ?string $identificacion = null): Builder
+    {
+        return $query->where(function($q) use ($email, $whatsapp, $identificacion) {
+            if ($email) {
+                $q->orWhere('email', $email);
+            }
+            if ($whatsapp) {
+                $q->orWhere('whatsapp', $whatsapp);
+            }
+            if ($identificacion) {
+                $q->orWhere('identificacion', $identificacion);
+            }
+        });
+    }
+
     // ====================================================================
     // MÉTODOS HELPER
     // ====================================================================
 
-    /**
-     * Verifica si tiene QR Code
-     */
     public function hasQRCode(): bool
     {
         return !empty($this->qr_code_url);
     }
 
-    /**
-     * Obtiene todos los números de ticket de una transacción
-     */
     public function getGroupedTicketNumbers(): array
     {
         return self::where('transaction_id', $this->transaction_id)
@@ -186,26 +178,17 @@ class Purchase extends Model
             ->toArray();
     }
 
-    /**
-     * Obtiene el total de tickets en esta transacción
-     */
     public function getTransactionTicketCount(): int
     {
         return self::where('transaction_id', $this->transaction_id)->count();
     }
 
-    /**
-     * Obtiene el monto total de la transacción completa
-     */
     public function getTransactionTotalAmount(): float
     {
         return (float) self::where('transaction_id', $this->transaction_id)
             ->sum('amount');
     }
 
-    /**
-     * Verifica si toda la transacción está completada
-     */
     public function isTransactionCompleted(): bool
     {
         $statuses = self::where('transaction_id', $this->transaction_id)
@@ -215,9 +198,6 @@ class Purchase extends Model
         return $statuses->count() === 1 && $statuses->first() === 'completed';
     }
 
-    /**
-     * Actualiza el estado de toda la transacción
-     */
     public function updateTransactionStatus(string $newStatus): int
     {
         return self::where('transaction_id', $this->transaction_id)
@@ -228,10 +208,6 @@ class Purchase extends Model
     // MÉTODOS ESTÁTICOS PARA CONSULTAS OPTIMIZADAS
     // ====================================================================
 
-    /**
-     * Obtiene todas las compras de una transacción (optimizado)
-     * Uso: Purchase::getByTransaction('TXN-...')
-     */
     public static function getByTransaction(string $transactionId)
     {
         return self::with(['event', 'eventPrice', 'paymentMethod'])
@@ -240,10 +216,6 @@ class Purchase extends Model
             ->get();
     }
 
-    /**
-     * Obtiene un resumen de la transacción
-     * Uso: Purchase::getTransactionSummary('TXN-...')
-     */
     public static function getTransactionSummary(string $transactionId): ?array
     {
         $purchases = self::where('transaction_id', $transactionId)->get();
@@ -259,6 +231,7 @@ class Purchase extends Model
             'event_id' => $first->event_id,
             'email' => $first->email,
             'whatsapp' => $first->whatsapp,
+            'identificacion' => $first->identificacion, // ✅ NUEVO
             'ticket_numbers' => $purchases->pluck('ticket_number')->toArray(),
             'total_tickets' => $purchases->count(),
             'total_amount' => $purchases->sum('amount'),
@@ -268,10 +241,6 @@ class Purchase extends Model
         ];
     }
 
-    /**
-     * Verifica si un número de ticket está disponible (optimizado con lock)
-     * Uso: Purchase::isTicketAvailable($eventId, $ticketNumber)
-     */
     public static function isTicketAvailable(int $eventId, string $ticketNumber): bool
     {
         return !self::where('event_id', $eventId)
@@ -279,10 +248,6 @@ class Purchase extends Model
             ->exists();
     }
 
-    /**
-     * Obtiene números de tickets reservados para un evento (usa índices)
-     * Uso: Purchase::getReservedTickets($eventId)
-     */
     public static function getReservedTickets(int $eventId): array
     {
         return self::where('event_id', $eventId)
@@ -291,10 +256,6 @@ class Purchase extends Model
             ->toArray();
     }
 
-    /**
-     * Cuenta transacciones únicas por evento (agregación optimizada)
-     * Uso: Purchase::countUniqueTransactions($eventId)
-     */
     public static function countUniqueTransactions(int $eventId): int
     {
         return self::where('event_id', $eventId)
@@ -307,22 +268,25 @@ class Purchase extends Model
     // POSTGRESQL ESPECÍFICO: BÚSQUEDAS AVANZADAS
     // ====================================================================
 
-    /**
-     * Búsqueda de texto completo en PostgreSQL (emails o whatsapp)
-     * Uso: Purchase::fullTextSearch('example@email.com')
-     */
+    // ✅ MEJORADO: Búsqueda full-text incluyendo identificación
     public static function fullTextSearch(string $searchTerm)
     {
         return self::where(function ($query) use ($searchTerm) {
             $query->where('email', 'ILIKE', "%{$searchTerm}%")
-                ->orWhere('whatsapp', 'LIKE', "%{$searchTerm}%");
+                ->orWhere('whatsapp', 'LIKE', "%{$searchTerm}%")
+                ->orWhere('identificacion', 'LIKE', "%{$searchTerm}%"); // ✅ NUEVO
         })->get();
     }
 
-    /**
-     * Agrupa transacciones con estadísticas (PostgreSQL GROUP BY optimizado)
-     * Útil para reportes
-     */
+    // ✅ NUEVO: Buscar todas las compras por cédula
+    public static function getByIdentificacion(string $identificacion)
+    {
+        return self::with(['event', 'eventPrice', 'paymentMethod'])
+            ->where('identificacion', $identificacion)
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+
     public static function getTransactionStats(int $eventId)
     {
         return self::selectRaw('
@@ -331,7 +295,8 @@ class Purchase extends Model
                 SUM(amount) as total_amount,
                 MAX(status) as status,
                 MIN(created_at) as created_at,
-                MAX(email) as email
+                MAX(email) as email,
+                MAX(identificacion) as identificacion
             ')
             ->where('event_id', $eventId)
             ->whereNotNull('transaction_id')

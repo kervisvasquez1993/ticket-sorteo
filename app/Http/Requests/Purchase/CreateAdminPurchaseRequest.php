@@ -92,7 +92,6 @@ class CreateAdminPurchaseRequest extends FormRequest
                     $outOfRange = [];
                     $alreadyReserved = [];
 
-                    // Verificar números duplicados en la misma solicitud
                     $duplicates = array_diff_assoc($value, array_unique($value));
                     if (!empty($duplicates)) {
                         $fail('No puedes seleccionar el mismo número dos veces.');
@@ -100,19 +99,16 @@ class CreateAdminPurchaseRequest extends FormRequest
                     }
 
                     foreach ($value as $ticketNumber) {
-                        // Verificar que sea un número entero
                         if (!is_int($ticketNumber)) {
                             $fail('Todos los números de ticket deben ser números enteros.');
                             return;
                         }
 
-                        // Verificar rango
                         if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
                             $outOfRange[] = $ticketNumber;
                             continue;
                         }
 
-                        // Verificar si está reservado
                         $isUsed = \App\Models\Purchase::where('event_id', $eventId)
                             ->where('ticket_number', $ticketNumber)
                             ->exists();
@@ -122,7 +118,6 @@ class CreateAdminPurchaseRequest extends FormRequest
                         }
                     }
 
-                    // Reportar errores consolidados
                     if (!empty($outOfRange)) {
                         $numbers = implode(', ', $outOfRange);
                         $fail("Los siguientes números están fuera del rango del evento ({$event->start_number} - {$event->end_number}): {$numbers}");
@@ -157,12 +152,10 @@ class CreateAdminPurchaseRequest extends FormRequest
                         return;
                     }
 
-                    // Definir qué monedas acepta cada tipo de método de pago
                     $allowedCurrencies = [
                         'pago_movil' => ['VES'],
                         'zelle' => ['USD'],
                         'binance' => ['USD'],
-                        // Agrega más tipos según tu sistema
                     ];
 
                     $methodType = $paymentMethod->type;
@@ -182,22 +175,35 @@ class CreateAdminPurchaseRequest extends FormRequest
                 'max:255',
             ],
             'payment_proof_url' => [
-                'nullable', // ✅ OPCIONAL para admin
+                'nullable',
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
             ],
-            'email' => [
+
+            // ✅ IDENTIFICACIÓN: OBLIGATORIA
+            'identificacion' => [
                 'required',
+                'string',
+                'regex:/^[VE]-?\d{7,9}$/i', // Formato: V-12345678 o E-12345678
+                'max:20',
+            ],
+
+            // ✅ EMAIL y WHATSAPP: OPCIONALES pero AL MENOS UNO OBLIGATORIO
+            'email' => [
+                'nullable',
                 'email:rfc,dns',
                 'max:255',
+                'required_without:whatsapp', // ✅ Obligatorio si no viene whatsapp
             ],
             'whatsapp' => [
-                'required',
+                'nullable',
                 'string',
                 'regex:/^\+?[1-9]\d{1,14}$/',
                 'max:20',
+                'required_without:email', // ✅ Obligatorio si no viene email
             ],
+
             'auto_approve' => [
                 'nullable',
                 'boolean',
@@ -220,12 +226,21 @@ class CreateAdminPurchaseRequest extends FormRequest
             'ticket_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
-            'email.required' => 'El correo electrónico es obligatorio.',
+
+            // ✅ IDENTIFICACIÓN: OBLIGATORIA
+            'identificacion.required' => 'La cédula de identidad es obligatoria.',
+            'identificacion.regex' => 'La cédula debe tener el formato: V-12345678 o E-12345678',
+            'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
+
+            // ✅ EMAIL y WHATSAPP: Al menos uno obligatorio
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
-            'whatsapp.required' => 'El número de WhatsApp es obligatorio.',
+            'email.required_without' => 'Debes proporcionar al menos un email o un WhatsApp.',
+
             'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
             'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
+            'whatsapp.required_without' => 'Debes proporcionar al menos un WhatsApp o un email.',
+
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
             'auto_approve.boolean' => 'El campo auto_approve debe ser verdadero o falso.',
