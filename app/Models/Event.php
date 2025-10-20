@@ -360,4 +360,94 @@ class Event extends Model
 
         return Purchase::isTicketNumberAvailable($this->id, $ticketNumber);
     }
+
+    /**
+     * Un evento tiene muchos premios
+     */
+    public function prizes()
+    {
+        return $this->hasMany(EventPrize::class);
+    }
+
+    /**
+     * Premio principal del evento
+     */
+    public function mainPrize()
+    {
+        return $this->hasOne(EventPrize::class)->where('is_main', true);
+    }
+
+    // ============================================
+    // MÉTODOS AUXILIARES PARA PREMIOS
+    // ============================================
+
+    /**
+     * Obtener solo el premio principal
+     */
+    public function getMainPrize(): ?EventPrize
+    {
+        return $this->mainPrize;
+    }
+
+    /**
+     * Obtener todos los premios
+     */
+    public function getAllPrizes()
+    {
+        return $this->prizes;
+    }
+
+    /**
+     * Verificar si tiene premios
+     */
+    public function hasPrizes(): bool
+    {
+        return $this->prizes()->exists();
+    }
+
+    /**
+     * Verificar si tiene premio principal
+     */
+    public function hasMainPrize(): bool
+    {
+        return $this->mainPrize()->exists();
+    }
+
+    /**
+     * Obtener información completa del evento con ganador y premios
+     */
+    public function getCompleteEventInfo(): array
+    {
+        $mainPrize = $this->getMainPrize();
+
+        return [
+            'event' => [
+                'id' => $this->id,
+                'name' => $this->name,
+                'description' => $this->description,
+                'status' => $this->status,
+                'start_date' => $this->start_date,
+                'end_date' => $this->end_date,
+                'winner_number' => $this->winner_number,
+                'image_url' => $this->image_url,
+            ],
+            'winner' => $this->getWinnerInfo(), // Ya tienes este método
+            'statistics' => $this->getStatistics(), // Ya tienes este método
+            'main_prize' => $mainPrize ? [
+                'id' => $mainPrize->id,
+                'title' => $mainPrize->title,
+                'description' => $mainPrize->description,
+                'image_url' => $mainPrize->getFullImageUrl(),
+            ] : null,
+            'all_prizes' => $this->getAllPrizes()->map(function ($prize) {
+                return [
+                    'id' => $prize->id,
+                    'title' => $prize->title,
+                    'description' => $prize->description,
+                    'image_url' => $prize->getFullImageUrl(),
+                    'is_main' => $prize->is_main,
+                ];
+            }),
+        ];
+    }
 }

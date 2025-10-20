@@ -8,6 +8,8 @@ use App\Interfaces\Event\IEventRepository;
 use App\Interfaces\Event\IEventServices;
 use App\Interfaces\EventPrice\IEventPriceRepository;
 use App\Interfaces\EventPrice\IEventPriceServices;
+use App\Interfaces\EventPrize\IEventPrizeRepository;
+use App\Interfaces\EventPrize\IEventPrizeServices;
 use App\Interfaces\PaymentMethod\IPaymentMethodRepository;
 use App\Interfaces\PaymentMethod\IPaymentMethodServices;
 use App\Interfaces\Purchase\IPurchaseRepository;
@@ -15,11 +17,13 @@ use App\Interfaces\Purchase\IPurchaseServices;
 use App\Repository\Auth\AuthRepository;
 use App\Repository\Event\EventRepository;
 use App\Repository\EventPrice\EventPriceRepository;
+use App\Repository\EventPrize\EventPrizeRepository;
 use App\Repository\PaymentMethod\PaymentMethodRepository;
 use App\Repository\Purchase\PurchaseRepository;
 use App\Services\Auth\AuthServices;
 use App\Services\Event\EventServices;
 use App\Services\EventPrice\EventPriceServices;
+use App\Services\EventPrize\EventPrizeServices;
 use App\Services\PaymentMethod\PaymentMethodServices;
 use App\Services\Purchase\PurchaseServices;
 use Illuminate\Support\ServiceProvider;
@@ -31,6 +35,8 @@ class RepositoriesServicesProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(IEventPrizeRepository::class, EventPrizeRepository::class);
+        $this->app->bind(IEventPrizeServices::class, EventPrizeServices::class);
         $this->app->bind(IEventPriceRepository::class, EventPriceRepository::class);
         $this->app->bind(IEventPriceServices::class, EventPriceServices::class);
         $this->app->bind(IPurchaseRepository::class, PurchaseRepository::class);
