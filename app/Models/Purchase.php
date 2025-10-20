@@ -27,7 +27,7 @@ class Purchase extends Model
         'total_amount',
         'email',
         'whatsapp',
-        'identificacion', // ✅ NUEVO
+        'identificacion',
     ];
 
     protected $casts = [

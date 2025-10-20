@@ -255,5 +255,6 @@ interface IPurchaseRepository
      */
     public function createAdminRandomPurchase(DTOsPurchase $data, $amount, $transactionId): Purchase;
 
-     public function getPurchasesByIdentificacion(string $identificacion);
+    public function getPurchasesByIdentificacion(string $identificacion);
+    public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
 }

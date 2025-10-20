@@ -902,4 +902,88 @@ class PurchaseServices implements IPurchaseServices
 
         return $identificacion;
     }
+
+
+    public function checkTicketAvailability(int $eventId, string $ticketNumber): array
+    {
+        try {
+            $event = Event::findOrFail($eventId);
+            $ticketNumber = trim($ticketNumber);
+            if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
+                return [
+                    'success' => false,
+                    'available' => false,
+                    'message' => "El número {$ticketNumber} está fuera del rango válido ({$event->start_number} - {$event->end_number})",
+                    'data' => [
+                        'ticket_number' => $ticketNumber,
+                        'event_id' => $eventId,
+                        'event_name' => $event->name,
+                        'valid_range' => [
+                            'start' => $event->start_number,
+                            'end' => $event->end_number
+                        ]
+                    ]
+                ];
+            }
+            $availabilityData = $this->PurchaseRepository->checkTicketAvailability($eventId, $ticketNumber);
+
+            if ($availabilityData['available']) {
+                return [
+                    'success' => true,
+                    'available' => true,
+                    'message' => "El número {$ticketNumber} está disponible",
+                    'data' => [
+                        'ticket_number' => $ticketNumber,
+                        'event_id' => $eventId,
+                        'event_name' => $event->name,
+                        'status' => 'available'
+                    ]
+                ];
+            } else {
+                $purchase = $availabilityData['purchase'];
+
+                return [
+                    'success' => true,
+                    'available' => false,
+                    'message' => "El número {$ticketNumber} ya está reservado",
+                    'data' => [
+                        'ticket_number' => $ticketNumber,
+                        'event_id' => $eventId,
+                        'event_name' => $event->name,
+                        'status' => 'reserved',
+                        'reserved_at' => $purchase->created_at->toDateTimeString(),
+                        'purchase_status' => $purchase->status
+                    ]
+                ];
+            }
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('Event not found', [
+                'event_id' => $eventId,
+                'ticket_number' => $ticketNumber
+            ]);
+
+            return [
+                'success' => false,
+                'available' => false,
+                'message' => 'Evento no encontrado',
+                'data' => [
+                    'ticket_number' => $ticketNumber,
+                    'event_id' => $eventId
+                ]
+            ];
+        } catch (\Exception $exception) {
+            Log::error('Error checking ticket availability', [
+                'event_id' => $eventId,
+                'ticket_number' => $ticketNumber,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'available' => false,
+                'message' => 'Error al verificar disponibilidad del ticket',
+                'data' => []
+            ];
+        }
+    }
 }

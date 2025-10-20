@@ -23,4 +23,5 @@ interface IPurchaseServices
     public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true);
     public function getPurchasesByWhatsApp(string $whatsapp);
     public function getPurchasesByIdentificacion(string $identificacion);
+    public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
 }

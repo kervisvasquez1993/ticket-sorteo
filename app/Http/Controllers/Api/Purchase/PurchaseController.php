@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Purchase;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Purchase\CheckTicketAvailabilityRequest;
 use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminRandomPurchaseRequest;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
@@ -269,5 +270,23 @@ class PurchaseController extends Controller
         }
 
         return response()->json($result['data'], 200);
+    }
+    public function checkTicketAvailability(CheckTicketAvailabilityRequest $request)
+    {
+        $validated = $request->validated();
+
+        $result = $this->PurchaseServices->checkTicketAvailability(
+            $validated['event_id'],
+            $validated['ticket_number']
+        );
+
+        if ($result['success']) {
+            return response()->json($result, 200);
+        }
+
+        return response()->json([
+            'error' => $result['message'],
+            'data' => $result['data'] ?? []
+        ], 422);
     }
 }

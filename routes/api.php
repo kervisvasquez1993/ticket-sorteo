@@ -23,6 +23,8 @@ Route::get('purchases-whatsapp/{whatsapp}', [PurchaseController::class, 'getByWh
     ->name('purchases.by.whatsapp');
 Route::get('purchases-identificacion/{identificacion}', [PurchaseController::class, 'getByIdentificacion'])
     ->name('purchases.by.identificacion');
+Route::post('purchases/check-ticket-availability', [PurchaseController::class, 'checkTicketAvailability']);
+
 Route::middleware('auth:api')->group(function () {
 
 
