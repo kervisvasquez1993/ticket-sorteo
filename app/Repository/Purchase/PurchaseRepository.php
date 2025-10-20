@@ -39,6 +39,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id' => $data->getUserId(),
             'email' => $data->getEmail(),
             'whatsapp' => $data->getWhatsapp(),
+            'identificacion' => $data->getIdentificacion(), // ✅ AGREGADO
             'event_id' => $data->getEventId(),
             'event_price_id' => $data->getEventPriceId(),
             'payment_method_id' => $data->getPaymentMethodId(),
@@ -99,7 +100,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id' => $data->getUserId(),
             'email' => $data->getEmail(),
             'whatsapp' => $data->getWhatsapp(),
-            'identificacion' => $data->getIdentificacion(), // ✅ NUEVO
+            'identificacion' => $data->getIdentificacion(), // ✅ AGREGADO
             'currency' => $data->getCurrency(),
             'ticket_number' => $ticketNumber,
             'amount' => $amount,
@@ -280,6 +281,7 @@ class PurchaseRepository implements IPurchaseRepository
             ->get();
     }
 
+    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT y en el formateo
     public function getPurchasesByWhatsApp(string $whatsapp)
     {
         $results = Purchase::select(
@@ -297,9 +299,55 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('whatsapp', $whatsapp)
+            ->with([
+                'event:id,name',
+                'paymentMethod:id,name',
+                'user:id,name,email'
+            ])
+            ->groupBy(
+                'transaction_id',
+                'currency',
+                'status',
+                'event_id',
+                'payment_method_id',
+                'payment_reference',
+                'payment_proof_url',
+                'user_id'
+            )
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return $results->map(function ($group) {
+            return $this->formatGroupedPurchase($group);
+        });
+    }
+
+    // ✅ NUEVO: Búsqueda por identificación
+    public function getPurchasesByIdentificacion(string $identificacion)
+    {
+        $results = Purchase::select(
+            'transaction_id',
+            DB::raw('MIN(id) as first_purchase_id'),
+            DB::raw('MIN(created_at) as created_at'),
+            DB::raw('COUNT(*) as quantity'),
+            DB::raw('SUM(amount) as total_amount'),
+            'currency',
+            'status',
+            'event_id',
+            'payment_method_id',
+            'payment_reference',
+            'payment_proof_url',
+            'user_id',
+            DB::raw('MAX(email) as email'),
+            DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
+            DB::raw('MAX(qr_code_url) as qr_code_url')
+        )
+            ->where('identificacion', $identificacion)
             ->with([
                 'event:id,name',
                 'paymentMethod:id,name',
@@ -327,6 +375,7 @@ class PurchaseRepository implements IPurchaseRepository
     // MÉTODOS DE AGRUPACIÓN
     // ====================================================================
 
+    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
     public function getGroupedPurchases(?DTOsPurchaseFilter $filters = null)
     {
         $query = Purchase::query();
@@ -350,6 +399,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->with([
@@ -394,6 +444,7 @@ class PurchaseRepository implements IPurchaseRepository
         ];
     }
 
+    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
     public function getGroupedUserPurchases($userId)
     {
         return Purchase::select(
@@ -410,6 +461,7 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_proof_url',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('user_id', $userId)
@@ -433,6 +485,7 @@ class PurchaseRepository implements IPurchaseRepository
             });
     }
 
+    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
     public function getPurchaseByTransaction(string $transactionId)
     {
         $group = Purchase::select(
@@ -450,6 +503,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('transaction_id', $transactionId)
@@ -477,6 +531,7 @@ class PurchaseRepository implements IPurchaseRepository
         return $this->formatGroupedPurchase($group);
     }
 
+    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
     public function getGroupedPurchasesByEvent(string $eventId)
     {
         return Purchase::select(
@@ -494,6 +549,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
+            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('event_id', $eventId)
@@ -569,6 +625,7 @@ class PurchaseRepository implements IPurchaseRepository
     // MÉTODOS PRIVADOS HELPER
     // ====================================================================
 
+    // ✅ ACTUALIZADO: Incluir identificacion en el response
     private function formatGroupedPurchase($group): array
     {
         $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
@@ -598,6 +655,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user' => $userData,
             'email' => $group->email,
             'whatsapp' => $group->whatsapp,
+            'identificacion' => $group->identificacion ?? null, // ✅ AGREGADO
             'quantity' => $group->quantity,
             'unit_price' => number_format($group->total_amount / $group->quantity, 2),
             'total_amount' => number_format($group->total_amount, 2),
@@ -615,6 +673,7 @@ class PurchaseRepository implements IPurchaseRepository
         ];
     }
 
+    // ✅ ACTUALIZADO: Incluir identificacion en los filtros de búsqueda
     private function applyFilters($query, DTOsPurchaseFilter $filters)
     {
         if ($filters->getUserId()) {
@@ -661,7 +720,8 @@ class PurchaseRepository implements IPurchaseRepository
                     ->orWhere('payment_reference', 'LIKE', '%' . $search . '%')
                     ->orWhere('email', 'LIKE', '%' . $search . '%')
                     ->orWhere('whatsapp', 'LIKE', '%' . $search . '%')
-                    ->orWhere('ticket_number', 'LIKE', '%' . $search . '%') // ✨ INCLUIR TICKET EN BÚSQUEDA GENERAL
+                    ->orWhere('identificacion', 'LIKE', '%' . $search . '%') // ✅ AGREGADO
+                    ->orWhere('ticket_number', 'LIKE', '%' . $search . '%')
                     ->orWhereHas('user', function ($userQuery) use ($search) {
                         $userQuery->where('name', 'LIKE', '%' . $search . '%')
                             ->orWhere('email', 'LIKE', '%' . $search . '%');

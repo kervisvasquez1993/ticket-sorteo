@@ -21,6 +21,8 @@ Route::get('/events-prices', [EventPriceController::class, 'index']);
 Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
 Route::get('purchases-whatsapp/{whatsapp}', [PurchaseController::class, 'getByWhatsApp'])
     ->name('purchases.by.whatsapp');
+Route::get('purchases-identificacion/{identificacion}', [PurchaseController::class, 'getByIdentificacion'])
+    ->name('purchases.by.identificacion');
 Route::middleware('auth:api')->group(function () {
 
 

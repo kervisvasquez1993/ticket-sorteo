@@ -22,4 +22,5 @@ interface IPurchaseServices
     public function createAdminPurchase(DTOsPurchase $data, bool $autoApprove = false);
     public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true);
     public function getPurchasesByWhatsApp(string $whatsapp);
+    public function getPurchasesByIdentificacion(string $identificacion);
 }

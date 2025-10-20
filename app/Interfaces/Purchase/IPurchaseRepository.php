@@ -254,4 +254,6 @@ interface IPurchaseRepository
      * @deprecated Usar bulkInsertPurchases() en su lugar
      */
     public function createAdminRandomPurchase(DTOsPurchase $data, $amount, $transactionId): Purchase;
+
+     public function getPurchasesByIdentificacion(string $identificacion);
 }

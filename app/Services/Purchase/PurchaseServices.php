@@ -851,4 +851,55 @@ class PurchaseServices implements IPurchaseServices
         // ✅ Usar repository
         return $this->PurchaseRepository->updateStatusByTransaction($transactionId, $newStatus);
     }
+
+    public function getPurchasesByIdentificacion(string $identificacion)
+    {
+        try {
+            // Normalizar la identificación antes de buscar
+            $identificacion = $this->normalizeIdentificacion($identificacion);
+
+            $results = $this->PurchaseRepository->getPurchasesByIdentificacion($identificacion);
+
+            if ($results->isEmpty()) {
+                return [
+                    'success' => false,
+                    'message' => 'No se encontraron compras para esta cédula de identidad',
+                    'data' => []
+                ];
+            }
+
+            return [
+                'success' => true,
+                'data' => [
+                    'purchases' => $results,
+                    'total_purchases' => $results->count(),
+                    'total_tickets' => $results->sum('quantity'),
+                    'identificacion' => $identificacion
+                ],
+                'message' => 'Compras obtenidas exitosamente'
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'data' => []
+            ];
+        }
+    }
+
+    /**
+     * Normaliza el formato de la identificación
+     */
+    private function normalizeIdentificacion(string $identificacion): string
+    {
+        // Convertir a mayúsculas
+        $identificacion = strtoupper(trim($identificacion));
+
+        // Si no tiene guion, agregarlo
+        if (!str_contains($identificacion, '-')) {
+            $identificacion = preg_replace('/^([VE])(\d+)$/', '$1-$2', $identificacion);
+        }
+
+        return $identificacion;
+    }
 }
