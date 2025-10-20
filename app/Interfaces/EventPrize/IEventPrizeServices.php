@@ -14,4 +14,5 @@ interface IEventPrizeServices
     public function updateEventPrize(DTOsEventPrize $data, $id);
     public function deleteEventPrize($id);
     public function setAsMainPrize($id);
+        public function getAllMainPrizes();
 }

@@ -24,6 +24,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middl
 Route::get('/events/active', [EventController::class, 'active']);
 Route::get('events/{eventId}/prizes', [EventPrizeController::class, 'getByEvent']);
 Route::get('events/{eventId}/main-prize', [EventPrizeController::class, 'getMainPrize']);
+Route::get('main-prizes', [EventPrizeController::class, 'getAllMainPrizes']);
+
 
 // ============================================
 // RUTAS PÚBLICAS - PRECIOS Y MÉTODOS DE PAGO

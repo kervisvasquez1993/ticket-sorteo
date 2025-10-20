@@ -156,4 +156,20 @@ class EventPrizeServices implements IEventPrizeServices
             ];
         }
     }
+    public function getAllMainPrizes()
+    {
+        try {
+            $results = $this->eventPrizeRepository->getAllMainPrizes();
+            return [
+                'success' => true,
+                'data' => $results,
+                'total' => $results->count()
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
 }

@@ -189,4 +189,20 @@ class EventPrizeController extends Controller
             'data' => $result['data']
         ], 200);
     }
+    public function getAllMainPrizes()
+    {
+        $result = $this->eventPrizeServices->getAllMainPrizes();
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'total' => $result['total'] ?? 0,
+            'data' => $result['data']
+        ], 200);
+    }
 }

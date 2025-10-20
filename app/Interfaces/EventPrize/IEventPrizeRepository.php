@@ -15,4 +15,5 @@ interface IEventPrizeRepository
     public function updateEventPrize(DTOsEventPrize $data, EventPrize $eventPrize): EventPrize;
     public function deleteEventPrize(EventPrize $eventPrize): EventPrize;
     public function removeAllMainPrizesFromEvent($eventId): void;
+    public function getAllMainPrizes();
 }

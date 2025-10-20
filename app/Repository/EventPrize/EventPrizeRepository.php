@@ -76,4 +76,25 @@ class EventPrizeRepository implements IEventPrizeRepository
             ->where('is_main', true)
             ->update(['is_main' => false]);
     }
+    public function getAllMainPrizes()
+    {
+        return EventPrize::with(['event' => function ($query) {
+            // Traer información relevante del evento
+            $query->select(
+                'id',
+                'name',
+                'description',
+                'status',
+                'start_date',
+                'end_date',
+                'winner_number',
+                'image_url',
+                'start_number',
+                'end_number'
+            );
+        }])
+            ->where('is_main', true)
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
 }
