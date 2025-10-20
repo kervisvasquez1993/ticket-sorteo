@@ -907,9 +907,17 @@ class PurchaseServices implements IPurchaseServices
     public function checkTicketAvailability(int $eventId, string $ticketNumber): array
     {
         try {
+            // Validar y obtener evento
             $event = Event::findOrFail($eventId);
+
+            // Normalizar número de ticket
             $ticketNumber = trim($ticketNumber);
-            if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
+
+            // ✅ Usar método del modelo Event (incluye validación de rango)
+            $availabilityInfo = $event->getTicketAvailability($ticketNumber);
+
+            // Si está fuera de rango
+            if (!$availabilityInfo['in_range']) {
                 return [
                     'success' => false,
                     'available' => false,
@@ -925,9 +933,9 @@ class PurchaseServices implements IPurchaseServices
                     ]
                 ];
             }
-            $availabilityData = $this->PurchaseRepository->checkTicketAvailability($eventId, $ticketNumber);
 
-            if ($availabilityData['available']) {
+            // Si está disponible
+            if ($availabilityInfo['available']) {
                 return [
                     'success' => true,
                     'available' => true,
@@ -939,25 +947,26 @@ class PurchaseServices implements IPurchaseServices
                         'status' => 'available'
                     ]
                 ];
-            } else {
-                $purchase = $availabilityData['purchase'];
-
-                return [
-                    'success' => true,
-                    'available' => false,
-                    'message' => "El número {$ticketNumber} ya está reservado",
-                    'data' => [
-                        'ticket_number' => $ticketNumber,
-                        'event_id' => $eventId,
-                        'event_name' => $event->name,
-                        'status' => 'reserved',
-                        'reserved_at' => $purchase->created_at->toDateTimeString(),
-                        'purchase_status' => $purchase->status
-                    ]
-                ];
             }
+
+            // Si está reservado
+            $purchase = $availabilityInfo['purchase'];
+
+            return [
+                'success' => true,
+                'available' => false,
+                'message' => "El número {$ticketNumber} ya está reservado",
+                'data' => [
+                    'ticket_number' => $ticketNumber,
+                    'event_id' => $eventId,
+                    'event_name' => $event->name,
+                    'status' => 'reserved',
+                    'reserved_at' => $purchase->created_at->toDateTimeString(),
+                    'purchase_status' => $purchase->status
+                ]
+            ];
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            Log::error('Event not found', [
+            Log::error('Event not found in checkTicketAvailability', [
                 'event_id' => $eventId,
                 'ticket_number' => $ticketNumber
             ]);
@@ -972,17 +981,22 @@ class PurchaseServices implements IPurchaseServices
                 ]
             ];
         } catch (\Exception $exception) {
-            Log::error('Error checking ticket availability', [
+            Log::error('Error in checkTicketAvailability', [
                 'event_id' => $eventId,
                 'ticket_number' => $ticketNumber,
                 'error' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+                'trace' => $exception->getTraceAsString()
             ]);
 
             return [
                 'success' => false,
                 'available' => false,
                 'message' => 'Error al verificar disponibilidad del ticket',
-                'data' => []
+                'data' => [
+                    'error_detail' => config('app.debug') ? $exception->getMessage() : null
+                ]
             ];
         }
     }

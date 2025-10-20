@@ -149,7 +149,7 @@ class Purchase extends Model
     // ✅ NUEVO: Búsqueda completa por cualquier dato de contacto
     public function scopeByAnyContact(Builder $query, ?string $email = null, ?string $whatsapp = null, ?string $identificacion = null): Builder
     {
-        return $query->where(function($q) use ($email, $whatsapp, $identificacion) {
+        return $query->where(function ($q) use ($email, $whatsapp, $identificacion) {
             if ($email) {
                 $q->orWhere('email', $email);
             }
@@ -303,5 +303,34 @@ class Purchase extends Model
             ->groupBy('transaction_id')
             ->orderBy('created_at', 'desc')
             ->get();
+    }
+
+    public static function isTicketNumberAvailable(int $eventId, string $ticketNumber): bool
+    {
+        return !self::where('event_id', $eventId)
+            ->where('ticket_number', $ticketNumber)
+            ->exists();
+    }
+
+    /**
+     * ✅ NUEVO: Obtener información básica de un ticket reservado
+     * Solo retorna campos no sensibles para verificación de disponibilidad
+     *
+     * @param int $eventId
+     * @param string $ticketNumber
+     * @return Purchase|null
+     */
+    public static function getTicketBasicInfo(int $eventId, string $ticketNumber): ?Purchase
+    {
+        return self::select([
+            'id',
+            'event_id',
+            'ticket_number',
+            'status',
+            'created_at'
+        ])
+            ->where('event_id', $eventId)
+            ->where('ticket_number', $ticketNumber)
+            ->first();
     }
 }

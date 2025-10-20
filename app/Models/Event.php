@@ -180,7 +180,7 @@ class Event extends Model
         return !empty($this->image_url);
     }
 
-      public function hasCompletedPurchaseForNumber(int $number): bool
+    public function hasCompletedPurchaseForNumber(int $number): bool
     {
         return $this->purchases()
             ->where('ticket_number', $number)
@@ -321,5 +321,43 @@ class Event extends Model
             'guest_participants' => $guestCount,
             'has_winner' => !is_null($this->winner_number),
         ];
+    }
+
+    public function getTicketAvailability(string $ticketNumber): array
+    {
+        // Validar rango
+        if ($ticketNumber < $this->start_number || $ticketNumber > $this->end_number) {
+            return [
+                'available' => false,
+                'in_range' => false,
+                'purchase' => null
+            ];
+        }
+
+        // Buscar purchase básico
+        $purchase = Purchase::getTicketBasicInfo($this->id, $ticketNumber);
+
+        return [
+            'available' => is_null($purchase),
+            'in_range' => true,
+            'purchase' => $purchase
+        ];
+    }
+
+    /**
+     * ✅ NUEVO: Verificación rápida de disponibilidad (solo boolean)
+     * Método ultra-optimizado para cuando solo necesitas saber si está disponible
+     *
+     * @param string $ticketNumber
+     * @return bool
+     */
+    public function isTicketAvailable(string $ticketNumber): bool
+    {
+        // Validar rango
+        if ($ticketNumber < $this->start_number || $ticketNumber > $this->end_number) {
+            return false;
+        }
+
+        return Purchase::isTicketNumberAvailable($this->id, $ticketNumber);
     }
 }

@@ -746,16 +746,7 @@ class PurchaseRepository implements IPurchaseRepository
     }
     public function checkTicketAvailability(int $eventId, string $ticketNumber): array
     {
-        $purchase = Purchase::where('event_id', $eventId)
-            ->where('ticket_number', $ticketNumber)
-            ->select([
-                'id',
-                'event_id',
-                'ticket_number',
-                'status',
-                'created_at'
-            ])
-            ->first();
+        $purchase = Purchase::getTicketBasicInfo($eventId, $ticketNumber);
 
         return [
             'available' => is_null($purchase),
