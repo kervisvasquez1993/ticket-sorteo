@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Route;
 // RUTAS DE AUTENTICACIÓN
 // ============================================
 Route::post('/login', [AuthController::class, 'login'])->name('login');
-Route::post('/register', [AuthController::class, 'register'])->name('register');
+Route::post('/register', [AuthController::class, 'register'])->name('register')->middleware('auth:api');
+Route::post('/change-password', [AuthController::class, 'changePassword'])->name('change-password')->middleware('auth:api');
+Route::get('/users', [AuthController::class, 'index'])->name('users.index')->middleware('auth:api');
+
 Route::post('/test', [AuthController::class, 'test'])->name('test');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth:api');
 

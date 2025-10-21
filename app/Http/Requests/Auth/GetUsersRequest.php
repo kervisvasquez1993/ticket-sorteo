@@ -8,14 +8,14 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 
-class RegisterRequest extends FormRequest
+class GetUsersRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        // Solo administradores pueden registrar usuarios
+        // Solo administradores pueden listar usuarios
         return Auth::check() && Auth::user()->isAdmin();
     }
 
@@ -27,10 +27,14 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255', // ✅ Cambiado de username a name
-            'email' => 'required|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:admin,customer',
+            'email' => 'nullable|email',
+            'name' => 'nullable|string|max:255',
+            'role' => 'nullable|in:admin,customer',
+            'search' => 'nullable|string|max:255',
+            'sort_by' => 'nullable|in:created_at,name,email,role',
+            'sort_order' => 'nullable|in:asc,desc',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100',
         ];
     }
 
@@ -42,15 +46,15 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'El nombre es obligatorio', // ✅ Actualizado
-            'email.required' => 'El correo electrónico es obligatorio',
-            'email.email' => 'El correo electrónico debe ser válido',
-            'email.unique' => 'Este correo electrónico ya está registrado',
-            'password.required' => 'La contraseña es obligatoria',
-            'password.min' => 'La contraseña debe tener al menos 8 caracteres',
-            'password.confirmed' => 'Las contraseñas no coinciden',
-            'role.required' => 'El rol es obligatorio',
-            'role.in' => 'El rol debe ser "customer" o "admin"',
+            'email.email' => 'El email debe ser válido',
+            'role.in' => 'El rol debe ser "admin" o "customer"',
+            'sort_by.in' => 'El campo de ordenamiento no es válido',
+            'sort_order.in' => 'El orden debe ser "asc" o "desc"',
+            'page.integer' => 'La página debe ser un número',
+            'page.min' => 'La página debe ser mayor a 0',
+            'per_page.integer' => 'Los elementos por página deben ser un número',
+            'per_page.min' => 'Debe haber al menos 1 elemento por página',
+            'per_page.max' => 'No se pueden mostrar más de 100 elementos por página',
         ];
     }
 
@@ -76,7 +80,7 @@ class RegisterRequest extends FormRequest
     protected function failedAuthorization()
     {
         throw new HttpResponseException(response()->json([
-            'message' => 'No tienes permisos para registrar usuarios. Solo administradores.',
+            'message' => 'No tienes permisos para listar usuarios. Solo administradores.',
         ], 403));
     }
 }

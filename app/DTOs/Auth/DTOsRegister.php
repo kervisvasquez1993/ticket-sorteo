@@ -7,37 +7,35 @@ use App\Http\Requests\Auth\RegisterRequest;
 class DTOsRegister
 {
     public function __construct(
-        private readonly string $username,
+        private readonly string $name, // ✅ Cambiado de username a name
         private readonly string $email,
         private readonly string $password,
-        private readonly string $role = 'client',
-
-
+        private readonly string $role,
     ) {}
 
     public static function fromRequest(RegisterRequest $request): self
     {
         return new self(
-            username: $request->validated('username'),
+            name: $request->validated('name'), // ✅ Cambiado
             email: $request->validated('email'),
             password: $request->validated('password'),
-            role: 'client'
+            role: $request->validated('role') ?? 'customer'
         );
     }
 
     public function toArray(): array
     {
         return [
-            'username' => $this->username,
+            'name' => $this->name, // ✅ Cambiado
             'email' => $this->email,
             'password' => $this->password,
             'role' => $this->role
         ];
     }
 
-    public function getUsername(): string
+    public function getName(): string // ✅ Cambiado de getUsername
     {
-        return $this->username;
+        return $this->name;
     }
 
     public function getEmail(): string
@@ -55,15 +53,16 @@ class DTOsRegister
         return $this->role;
     }
 
-
     public function getRoleList(): array
     {
-        return ['client', 'admin'];
+        return ['customer', 'admin'];
     }
+
     public function isValidRole(string $role): bool
     {
         return in_array($role, $this->getRoleList());
     }
+
     public function isValid(): bool
     {
         return $this->isValidRole($this->role);

@@ -8,14 +8,14 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 
-class RegisterRequest extends FormRequest
+class ChangePasswordRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        // Solo administradores pueden registrar usuarios
+        // Solo administradores pueden cambiar contraseñas de usuarios
         return Auth::check() && Auth::user()->isAdmin();
     }
 
@@ -27,10 +27,8 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255', // ✅ Cambiado de username a name
-            'email' => 'required|email|max:255|unique:users,email',
+            'user_id' => 'required|integer|exists:users,id',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:admin,customer',
         ];
     }
 
@@ -42,15 +40,12 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'El nombre es obligatorio', // ✅ Actualizado
-            'email.required' => 'El correo electrónico es obligatorio',
-            'email.email' => 'El correo electrónico debe ser válido',
-            'email.unique' => 'Este correo electrónico ya está registrado',
+            'user_id.required' => 'El ID del usuario es obligatorio',
+            'user_id.integer' => 'El ID del usuario debe ser un número',
+            'user_id.exists' => 'El usuario no existe',
             'password.required' => 'La contraseña es obligatoria',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres',
             'password.confirmed' => 'Las contraseñas no coinciden',
-            'role.required' => 'El rol es obligatorio',
-            'role.in' => 'El rol debe ser "customer" o "admin"',
         ];
     }
 
@@ -76,7 +71,7 @@ class RegisterRequest extends FormRequest
     protected function failedAuthorization()
     {
         throw new HttpResponseException(response()->json([
-            'message' => 'No tienes permisos para registrar usuarios. Solo administradores.',
+            'message' => 'No tienes permisos para cambiar contraseñas. Solo administradores.',
         ], 403));
     }
 }

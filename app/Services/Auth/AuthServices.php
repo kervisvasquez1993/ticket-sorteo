@@ -2,9 +2,10 @@
 
 namespace App\Services\Auth;
 
-use App\DTOs\Auth\DTOsAuth;
 use App\DTOs\Auth\DTOsLogin;
 use App\DTOs\Auth\DTOsRegister;
+use App\DTOs\Auth\DTOsChangePassword; // ✅ Agregar
+use App\DTOs\Auth\DTOsUserFilter;
 use App\Interfaces\Auth\IAuthServices;
 use App\Interfaces\Auth\IAuthRepository;
 use App\Models\User;
@@ -54,17 +55,16 @@ class AuthServices implements IAuthServices
             $user = $this->AuthRepository->createUser($registerDTO);
             return [
                 'success' => true,
-                'data' =>  $user,
-                'error' => "test"
+                'data' =>  $user
             ];
         } catch (Exception $exception) {
             return [
                 'success' => false,
-                'message' => $exception->getMessage(),
-                'code' => "442"
+                'message' => $exception->getMessage()
             ];
         }
     }
+
     public function logout(User $user)
     {
         try {
@@ -78,6 +78,72 @@ class AuthServices implements IAuthServices
             return [
                 'success' => false,
                 'message' => $ex->getMessage()
+            ];
+        }
+    }
+
+    // ✅ Nuevo método
+    public function changePassword(DTOsChangePassword $changePasswordDTO)
+    {
+        try {
+            $updated = $this->AuthRepository->updatePassword(
+                $changePasswordDTO->getUserId(),
+                $changePasswordDTO->getPassword()
+            );
+
+            if (!$updated) {
+                return [
+                    'success' => false,
+                    'message' => 'No se pudo actualizar la contraseña'
+                ];
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Contraseña actualizada exitosamente'
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+    public function getAllUsers(DTOsUserFilter $filters, int $excludeUserId)
+    {
+        try {
+            // Validar filtros
+            if (!$filters->isValidSortField()) {
+                return [
+                    'success' => false,
+                    'message' => 'Campo de ordenamiento no válido'
+                ];
+            }
+
+            if (!$filters->isValidSortOrder()) {
+                return [
+                    'success' => false,
+                    'message' => 'Orden de clasificación no válido'
+                ];
+            }
+
+            if (!$filters->isValidRole()) {
+                return [
+                    'success' => false,
+                    'message' => 'Rol no válido'
+                ];
+            }
+
+            $users = $this->AuthRepository->getAllUsers($filters, $excludeUserId);
+
+            return [
+                'success' => true,
+                'data' => $users
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
             ];
         }
     }
