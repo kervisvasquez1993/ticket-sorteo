@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libzip-dev \
     libpq-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
     zip \
     unzip \
     nginx
@@ -17,8 +19,9 @@ RUN apt-get update && apt-get install -y \
 # Limpiar cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Instalar extensiones PHP
-RUN docker-php-ext-install pdo_pgsql pgsql mbstring exif pcntl bcmath gd zip
+# Configurar y instalar extensiones PHP (GD con soporte JPEG y FreeType)
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_pgsql pgsql mbstring exif pcntl bcmath gd zip
 
 # Instalar Redis
 RUN pecl install redis && docker-php-ext-enable redis
@@ -55,6 +58,7 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage \
     && chmod -R 775 bootstrap/cache \
     && chmod -R 775 app/secrets
+
 # Script de inicio MEJORADO con worker en segundo plano
 RUN echo '#!/bin/bash\n\
 set -e\n\
