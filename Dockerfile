@@ -55,8 +55,7 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage \
     && chmod -R 775 bootstrap/cache \
     && chmod -R 775 app/secrets
-
-# Script de inicio MEJORADO
+# Script de inicio MEJORADO con worker en segundo plano
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
@@ -75,7 +74,6 @@ php artisan cache:clear || true\n\
 echo "Generando llaves de Passport en app/secrets/oauth..."\n\
 if [ ! -f /var/www/html/app/secrets/oauth/oauth-private.key ]; then\n\
     php artisan passport:keys --force\n\
-    # Mover las llaves generadas a la carpeta correcta\n\
     if [ -f /var/www/html/storage/oauth-private.key ]; then\n\
         mv /var/www/html/storage/oauth-private.key /var/www/html/app/secrets/oauth/\n\
         mv /var/www/html/storage/oauth-public.key /var/www/html/app/secrets/oauth/\n\
@@ -92,6 +90,9 @@ php artisan view:cache || true\n\
 \n\
 echo "Iniciando PHP-FPM..."\n\
 php-fpm -D\n\
+\n\
+echo "Iniciando Queue Worker en segundo plano..."\n\
+nohup php artisan queue:work --sleep=3 --tries=3 --timeout=90 > /var/www/html/storage/logs/worker.log 2>&1 &\n\
 \n\
 echo "Iniciando Nginx..."\n\
 nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
