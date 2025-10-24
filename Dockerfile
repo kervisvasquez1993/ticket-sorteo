@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     libjpeg-dev \
     libfreetype6-dev \
+    libmagickwand-dev \
     zip \
     unzip \
     nginx
@@ -22,6 +23,10 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 # Configurar y instalar extensiones PHP (GD con soporte JPEG y FreeType)
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_pgsql pgsql mbstring exif pcntl bcmath gd zip
+
+# Instalar Imagick
+RUN pecl install imagick \
+    && docker-php-ext-enable imagick
 
 # Instalar Redis
 RUN pecl install redis && docker-php-ext-enable redis
