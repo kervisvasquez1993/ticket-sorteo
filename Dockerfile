@@ -1,7 +1,7 @@
 # Usar PHP-FPM
 FROM php:8.3-fpm
 
-# Instalar dependencias del sistema (AGREGAMOS supervisor)
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -12,8 +12,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     zip \
     unzip \
-    nginx \
-    supervisor
+    nginx
 
 # Limpiar cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -42,7 +41,7 @@ COPY . .
 # Instalar dependencias
 RUN composer install --no-dev --optimize-autoloader
 
-# Crear directorios necesarios
+# Crear directorios necesarios (INCLUYE app/secrets/oauth)
 RUN mkdir -p storage/logs \
     storage/framework/cache \
     storage/framework/sessions \
@@ -50,48 +49,12 @@ RUN mkdir -p storage/logs \
     bootstrap/cache \
     app/secrets/oauth
 
-# Permisos
+# Permisos MEJORADOS - www-data debe ser dueño
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
     && chmod -R 775 storage \
     && chmod -R 775 bootstrap/cache \
     && chmod -R 775 app/secrets
-
-# Configuración de Supervisor para Laravel Queue Worker
-RUN echo '[supervisord]\n\
-nodaemon=true\n\
-logfile=/var/www/html/storage/logs/supervisord.log\n\
-pidfile=/var/run/supervisord.pid\n\
-\n\
-[program:php-fpm]\n\
-command=/usr/local/sbin/php-fpm -F\n\
-autostart=true\n\
-autorestart=true\n\
-priority=5\n\
-stdout_logfile=/var/www/html/storage/logs/php-fpm.log\n\
-stderr_logfile=/var/www/html/storage/logs/php-fpm-error.log\n\
-\n\
-[program:nginx]\n\
-command=/usr/sbin/nginx -g "daemon off;"\n\
-autostart=true\n\
-autorestart=true\n\
-priority=10\n\
-stdout_logfile=/var/www/html/storage/logs/nginx.log\n\
-stderr_logfile=/var/www/html/storage/logs/nginx-error.log\n\
-\n\
-[program:laravel-worker]\n\
-process_name=%(program_name)s_%(process_num)02d\n\
-command=php /var/www/html/artisan queue:work --sleep=3 --tries=3 --max-time=3600 --timeout=90\n\
-autostart=true\n\
-autorestart=true\n\
-stopasgroup=true\n\
-killasgroup=true\n\
-user=www-data\n\
-numprocs=1\n\
-redirect_stderr=true\n\
-stdout_logfile=/var/www/html/storage/logs/worker.log\n\
-stopwaitsecs=3600\n\
-priority=15' > /etc/supervisor/conf.d/supervisord.conf
 
 # Script de inicio MEJORADO
 RUN echo '#!/bin/bash\n\
@@ -112,6 +75,7 @@ php artisan cache:clear || true\n\
 echo "Generando llaves de Passport en app/secrets/oauth..."\n\
 if [ ! -f /var/www/html/app/secrets/oauth/oauth-private.key ]; then\n\
     php artisan passport:keys --force\n\
+    # Mover las llaves generadas a la carpeta correcta\n\
     if [ -f /var/www/html/storage/oauth-private.key ]; then\n\
         mv /var/www/html/storage/oauth-private.key /var/www/html/app/secrets/oauth/\n\
         mv /var/www/html/storage/oauth-public.key /var/www/html/app/secrets/oauth/\n\
@@ -126,8 +90,11 @@ php artisan config:cache || true\n\
 php artisan route:cache || true\n\
 php artisan view:cache || true\n\
 \n\
-echo "Iniciando servicios con Supervisor..."\n\
-/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' > /start.sh && chmod +x /start.sh
+echo "Iniciando PHP-FPM..."\n\
+php-fpm -D\n\
+\n\
+echo "Iniciando Nginx..."\n\
+nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
 
 EXPOSE 80
 
