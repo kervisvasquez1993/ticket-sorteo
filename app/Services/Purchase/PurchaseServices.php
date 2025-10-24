@@ -779,7 +779,7 @@ class PurchaseServices implements IPurchaseServices
     {
         try {
             $frontendUrl = config('app.frontend_url', 'https://tu-frontend.com');
-            $purchaseUrl = "{$frontendUrl}/purchase/{$transactionId}";
+            $purchaseUrl = "{$frontendUrl}/my-purchase/{$transactionId}";
 
             $qrImage = QrCodeGenerator::format('png')
                 ->size(400)
