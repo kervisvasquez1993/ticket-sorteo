@@ -185,7 +185,6 @@ class CreateAdminPurchaseRequest extends FormRequest
             'identificacion' => [
                 'required',
                 'string',
-                'regex:/^[VE]-?\d{7,9}$/i', // Formato: V-12345678 o E-12345678
                 'max:20',
             ],
 
