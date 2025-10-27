@@ -192,12 +192,9 @@ class CreatePurchaseRequest extends FormRequest
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
             ],
-
-            // ✅ IDENTIFICACIÓN: OBLIGATORIA
             'identificacion' => [
                 'required',
                 'string',
-                'regex:/^[VE]-?\d{7,9}$/i', // Formato: V-12345678 o E-12345678
                 'max:20',
             ],
 
