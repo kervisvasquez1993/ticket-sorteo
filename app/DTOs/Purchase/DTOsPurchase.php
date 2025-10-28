@@ -2,14 +2,12 @@
 
 namespace App\DTOs\Purchase;
 
-use App\Http\Requests\Purchase\CreateAdminMassivePurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminRandomPurchaseRequest;
-
+use App\Http\Requests\Purchase\CreateAdminMassivePurchaseRequest; // ✅ NUEVO
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
-
 use App\Models\EventPrice;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;

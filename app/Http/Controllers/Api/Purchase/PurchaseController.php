@@ -293,7 +293,28 @@ class PurchaseController extends Controller
     public function storeAdminMassive(CreateAdminMassivePurchaseRequest $request)
     {
         $autoApprove = $request->input('auto_approve', true);
+        $quantity = $request->input('quantity');
 
+        if ($quantity > 500) {
+            $result = $this->PurchaseServices->createMassivePurchaseAsync(
+                DTOsPurchase::fromAdminMassivePurchaseRequest($request),
+                $autoApprove
+            );
+
+            if (!$result['success']) {
+                return response()->json([
+                    'error' => $result['message']
+                ], 422);
+            }
+
+            return response()->json([
+                'message' => $result['message'],
+                'data' => $result['data'],
+                'processing_mode' => 'background' // Indicador para el frontend
+            ], 202); // 202 Accepted - Procesamiento iniciado
+        }
+
+        // Para cantidades ≤500, usar método síncrono original
         $result = $this->PurchaseServices->createAdminRandomPurchase(
             DTOsPurchase::fromAdminMassivePurchaseRequest($request),
             $autoApprove
@@ -307,7 +328,53 @@ class PurchaseController extends Controller
 
         return response()->json([
             'message' => $result['message'],
-            'data' => $result['data']
+            'data' => $result['data'],
+            'processing_mode' => 'synchronous' // Indicador para el frontend
         ], 201);
+    }
+    public function storeAdminMassiveAsync(CreateAdminMassivePurchaseRequest $request)
+    {
+        $autoApprove = $request->input('auto_approve', true);
+
+        $result = $this->PurchaseServices->createMassivePurchaseAsync(
+            DTOsPurchase::fromAdminMassivePurchaseRequest($request),
+            $autoApprove
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data'],
+            'processing_mode' => 'background'
+        ], 202); // 202 Accepted
+    }
+
+    /**
+     * ✅ NUEVO: Consultar estado de compra masiva
+     *
+     * Permite verificar si una compra en background ya fue procesada.
+     *
+     * Ruta: GET /admin/massive-status/{transactionId}
+     */
+    public function getMassivePurchaseStatus(string $transactionId)
+    {
+        $result = $this->PurchaseServices->getMassivePurchaseStatus($transactionId);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message'],
+                'data' => $result['data'] ?? null
+            ], $result['data']['status'] ?? 'processing' ? 200 : 404);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
     }
 }

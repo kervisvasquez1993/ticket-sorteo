@@ -345,92 +345,7 @@ class PurchaseServices implements IPurchaseServices
         }
     }
 
-    /**
-     * ✅ OPTIMIZADO: Crear compra admin con números aleatorios (Repository)
-     */
-    public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true)
-    {
-        try {
-            DB::beginTransaction();
 
-            $event = Event::findOrFail($data->getEventId());
-            $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
-
-            $availableCount = $this->getAvailableNumbersCount($event);
-
-            if ($availableCount < $data->getQuantity()) {
-                throw new Exception("Solo quedan {$availableCount} números disponibles.");
-            }
-
-            $transactionId = $this->generateUniqueTransactionId('ADM');
-            $totalAmount = $data->getTotalAmount();
-
-            // ✅ Preparar e insertar usando repository
-            $purchaseRecords = [];
-            for ($i = 0; $i < $data->getQuantity(); $i++) {
-                $purchaseRecords[] = $this->PurchaseRepository->preparePurchaseRecord(
-                    $data,
-                    $eventPrice->amount,
-                    $transactionId,
-                    null,
-                    'pending'
-                );
-            }
-
-            $this->PurchaseRepository->bulkInsertPurchases($purchaseRecords);
-
-            // ✅ Generar y actualizar QR Code
-            $qrImageUrl = $this->generatePurchaseQRCode($transactionId);
-            if ($qrImageUrl) {
-                $this->PurchaseRepository->updateQrCodeByTransaction($transactionId, $qrImageUrl);
-            }
-
-            DB::commit();
-
-            // ✅ Si auto_approve, ejecutar aprobación
-            if ($autoApprove) {
-                $approvalResult = $this->approvePurchase($transactionId);
-
-                if (!$approvalResult['success']) {
-                    throw new Exception($approvalResult['message']);
-                }
-
-                return [
-                    'success' => true,
-                    'data' => [
-                        'transaction_id' => $transactionId,
-                        'quantity' => $data->getQuantity(),
-                        'total_amount' => $totalAmount,
-                        'assigned_numbers' => $approvalResult['data']['assigned_numbers'],
-                        'status' => 'completed',
-                        'qr_code_url' => $qrImageUrl,
-                    ],
-                    'message' => 'Compra creada y aprobada automáticamente. Números asignados: '
-                        . implode(', ', $approvalResult['data']['assigned_numbers'])
-                ];
-            }
-
-            return [
-                'success' => true,
-                'data' => [
-                    'transaction_id' => $transactionId,
-                    'quantity' => $data->getQuantity(),
-                    'total_amount' => $totalAmount,
-                    'status' => 'pending',
-                    'qr_code_url' => $qrImageUrl,
-                ],
-                'message' => 'Compra registrada exitosamente. Status: Pendiente de aprobación.'
-            ];
-        } catch (Exception $exception) {
-            DB::rollBack();
-            Log::error('Error creating admin random purchase: ' . $exception->getMessage());
-
-            return [
-                'success' => false,
-                'message' => $exception->getMessage()
-            ];
-        }
-    }
 
     // ====================================================================
     // MÉTODOS DE APROBACIÓN Y RECHAZO
@@ -997,6 +912,231 @@ class PurchaseServices implements IPurchaseServices
                 'data' => [
                     'error_detail' => config('app.debug') ? $exception->getMessage() : null
                 ]
+            ];
+        }
+    }
+    /**
+     * ✅ OPTIMIZADO: Crear compra admin con números aleatorios (Repository)
+     */
+    public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true)
+    {
+        try {
+            DB::beginTransaction();
+
+            $event = Event::findOrFail($data->getEventId());
+            $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
+
+            $availableCount = $this->getAvailableNumbersCount($event);
+
+            if ($availableCount < $data->getQuantity()) {
+                throw new Exception("Solo quedan {$availableCount} números disponibles.");
+            }
+
+            $transactionId = $this->generateUniqueTransactionId('ADM');
+            $totalAmount = $data->getTotalAmount();
+
+            // ✅ Preparar e insertar usando repository
+            $purchaseRecords = [];
+            for ($i = 0; $i < $data->getQuantity(); $i++) {
+                $purchaseRecords[] = $this->PurchaseRepository->preparePurchaseRecord(
+                    $data,
+                    $eventPrice->amount,
+                    $transactionId,
+                    null,
+                    'pending'
+                );
+            }
+
+            $this->PurchaseRepository->bulkInsertPurchases($purchaseRecords);
+
+            // ✅ Generar y actualizar QR Code
+            $qrImageUrl = $this->generatePurchaseQRCode($transactionId);
+            if ($qrImageUrl) {
+                $this->PurchaseRepository->updateQrCodeByTransaction($transactionId, $qrImageUrl);
+            }
+
+            DB::commit();
+
+            // ✅ Si auto_approve, ejecutar aprobación
+            if ($autoApprove) {
+                $approvalResult = $this->approvePurchase($transactionId);
+
+                if (!$approvalResult['success']) {
+                    throw new Exception($approvalResult['message']);
+                }
+
+                return [
+                    'success' => true,
+                    'data' => [
+                        'transaction_id' => $transactionId,
+                        'quantity' => $data->getQuantity(),
+                        'total_amount' => $totalAmount,
+                        'assigned_numbers' => $approvalResult['data']['assigned_numbers'],
+                        'status' => 'completed',
+                        'qr_code_url' => $qrImageUrl,
+                    ],
+                    'message' => 'Compra creada y aprobada automáticamente. Números asignados: '
+                        . implode(', ', $approvalResult['data']['assigned_numbers'])
+                ];
+            }
+
+            return [
+                'success' => true,
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'quantity' => $data->getQuantity(),
+                    'total_amount' => $totalAmount,
+                    'status' => 'pending',
+                    'qr_code_url' => $qrImageUrl,
+                ],
+                'message' => 'Compra registrada exitosamente. Status: Pendiente de aprobación.'
+            ];
+        } catch (Exception $exception) {
+            DB::rollBack();
+            Log::error('Error creating admin random purchase: ' . $exception->getMessage());
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+    public function createMassivePurchaseAsync(DTOsPurchase $data, bool $autoApprove = true): array
+    {
+        try {
+            $event = Event::findOrFail($data->getEventId());
+            $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
+
+            $availableCount = $this->getAvailableNumbersCount($event);
+
+            if ($availableCount < $data->getQuantity()) {
+                return [
+                    'success' => false,
+                    'message' => "No hay suficientes tickets disponibles. Solicitados: {$data->getQuantity()}, Disponibles: {$availableCount}"
+                ];
+            }
+
+            $transactionId = $this->generateUniqueTransactionId();
+
+            // ✅ ASEGURAR QUE CURRENCY SIEMPRE TENGA UN VALOR
+            $currency = $data->getCurrency() ?? $eventPrice->currency ?? 'USD';
+
+            $jobData = [
+                'event_id' => $data->getEventId(),
+                'event_price_id' => $data->getEventPriceId(),
+                'payment_method_id' => $data->getPaymentMethodId(),
+                'quantity' => $data->getQuantity(),
+                'identificacion' => $data->getIdentificacion(),
+                'email' => $data->getEmail(),
+                'whatsapp' => $data->getWhatsapp(),
+                'currency' => $currency,
+                'user_id' => $data->getUserId(),
+                'payment_reference' => $data->getPaymentReference(),
+                'payment_proof_url' => $data->getPaymentProofUrl(),
+            ];
+
+            \App\Jobs\ProcessMassivePurchaseJob::dispatch(
+                $jobData,
+                $transactionId,
+                $autoApprove,
+                'MASSIVE'
+            );
+
+            Log::info('Compra masiva despachada a background job', [
+                'transaction_id' => $transactionId,
+                'quantity' => $data->getQuantity(),
+                'event_id' => $event->id,
+                'auto_approve' => $autoApprove
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Tu compra de ' . number_format($data->getQuantity()) . ' tickets está siendo procesada en segundo plano.',
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'quantity' => $data->getQuantity(),
+                    'total_amount' => $eventPrice->amount * $data->getQuantity(),
+                    'currency' => $currency,
+                    'status' => 'processing',
+                    'estimated_completion' => now()->addMinutes(5)->toDateTimeString(),
+                    'event' => [
+                        'id' => $event->id,
+                        'name' => $event->name
+                    ]
+                ]
+            ];
+        } catch (Exception $exception) {
+            Log::error('Error al despachar compra masiva', [
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Error al iniciar el procesamiento: ' . $exception->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * ✅ NUEVO: Consultar estado de una compra masiva en proceso
+     *
+     * Permite al usuario verificar si su compra masiva ya fue procesada.
+     *
+     * @param string $transactionId
+     * @return array
+     */
+    public function getMassivePurchaseStatus(string $transactionId): array
+    {
+        try {
+
+            $purchases = $this->PurchaseRepository->getPurchasesByTransaction($transactionId);
+
+            if ($purchases->isEmpty()) {
+                return [
+                    'success' => false,
+                    'message' => 'Transacción no encontrada o aún en proceso',
+                    'data' => [
+                        'transaction_id' => $transactionId,
+                        'status' => 'processing',
+                        'note' => 'Si acabas de crear esta compra, espera unos momentos y vuelve a consultar.'
+                    ]
+                ];
+            }
+            $firstPurchase = $purchases->first();
+            $totalTickets = $purchases->count();
+            $totalAmount = $purchases->sum('amount');
+
+            return [
+                'success' => true,
+                'message' => 'Compra masiva completada',
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'status' => $firstPurchase->status,
+                    'quantity' => $totalTickets,
+                    'total_amount' => $totalAmount,
+                    'currency' => $firstPurchase->currency,
+                    'qr_code_url' => $firstPurchase->qr_code_url,
+                    'created_at' => $firstPurchase->created_at->toDateTimeString(),
+                    'event' => [
+                        'id' => $firstPurchase->event_id,
+                        'name' => $firstPurchase->event->name ?? 'N/A'
+                    ],
+                    'contact' => [
+                        'email' => $firstPurchase->email,
+                        'whatsapp' => $firstPurchase->whatsapp,
+                        'identificacion' => $firstPurchase->identificacion
+                    ]
+                ]
+            ];
+        } catch (Exception $exception) {
+            Log::error('Error consultando estado de compra masiva', [
+                'transaction_id' => $transactionId,
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Error al consultar el estado: ' . $exception->getMessage()
             ];
         }
     }

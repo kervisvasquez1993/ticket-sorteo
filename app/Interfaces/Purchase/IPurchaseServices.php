@@ -24,4 +24,6 @@ interface IPurchaseServices
     public function getPurchasesByWhatsApp(string $whatsapp);
     public function getPurchasesByIdentificacion(string $identificacion);
     public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
+    public function getMassivePurchaseStatus(string $transactionId): array;
+    public function createMassivePurchaseAsync(DTOsPurchase $data, bool $autoApprove = true): array;
 }
