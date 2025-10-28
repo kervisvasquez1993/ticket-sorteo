@@ -86,6 +86,7 @@ Route::middleware('auth:api')->group(function () {
     Route::prefix('purchases')->group(function () {
         Route::post('admin', [PurchaseController::class, 'storeAdmin']);
         Route::post('admin/random', [PurchaseController::class, 'storeAdminRandom']);
+        Route::post('admin/massive', [PurchaseController::class, 'storeAdminMassive']);
         Route::get('my-purchases', [PurchaseController::class, 'myPurchases']);
         Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
         Route::patch('{transactionId}/approve', [PurchaseController::class, 'approve']);

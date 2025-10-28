@@ -2,11 +2,14 @@
 
 namespace App\DTOs\Purchase;
 
+use App\Http\Requests\Purchase\CreateAdminMassivePurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminRandomPurchaseRequest;
+
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
+
 use App\Models\EventPrice;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -19,9 +22,9 @@ class DTOsPurchase
         private readonly int $event_price_id,
         private readonly int $payment_method_id,
         private readonly int $quantity,
-        private readonly string $identificacion,      // ✅ OBLIGATORIO
-        private readonly ?string $email = null,       // ✅ Opcional
-        private readonly ?string $whatsapp = null,    // ✅ Opcional
+        private readonly string $identificacion,
+        private readonly ?string $email = null,
+        private readonly ?string $whatsapp = null,
         private readonly ?string $currency = null,
         private readonly ?int $user_id = null,
         private readonly ?array $specific_numbers = null,
@@ -182,6 +185,37 @@ class DTOsPurchase
         );
     }
 
+    // ✅ NUEVO MÉTODO PARA COMPRA MASIVA ADMINISTRATIVA
+    public static function fromAdminMassivePurchaseRequest(CreateAdminMassivePurchaseRequest $request): self
+    {
+        $validated = $request->validated();
+        $paymentProofUrl = null;
+
+        if ($request->hasFile('payment_proof_url')) {
+            $paymentProofUrl = self::uploadPaymentMassiveProofToS3Admin($request);
+        }
+
+        $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
+        $quantity = $validated['quantity'];
+        $totalAmount = $eventPrice->amount * $quantity;
+
+        return new self(
+            event_id: $validated['event_id'],
+            event_price_id: $validated['event_price_id'],
+            payment_method_id: $validated['payment_method_id'],
+            quantity: $quantity,
+            identificacion: $validated['identificacion'],
+            email: $validated['email'] ?? null,
+            whatsapp: $validated['whatsapp'] ?? null,
+            currency: $validated['currency'] ?? $eventPrice->currency,
+            user_id: Auth::id(),
+            specific_numbers: null, // Para compras masivas aleatorias
+            payment_reference: $validated['payment_reference'] ?? null,
+            payment_proof_url: $paymentProofUrl,
+            total_amount: $totalAmount,
+        );
+    }
+
     public static function fromAdminPurchaseRequest(CreateAdminPurchaseRequest $request): self
     {
         $validated = $request->validated();
@@ -200,9 +234,9 @@ class DTOsPurchase
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
             quantity: $ticketCount,
-            identificacion: $validated['identificacion'],  // ✅ OBLIGATORIO
-            email: $validated['email'] ?? null,           // ✅ Opcional
-            whatsapp: $validated['whatsapp'] ?? null,     // ✅ Opcional
+            identificacion: $validated['identificacion'],
+            email: $validated['email'] ?? null,
+            whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::id(),
             specific_numbers: $validated['ticket_numbers'],
@@ -252,6 +286,27 @@ class DTOsPurchase
         return null;
     }
 
+    // ✅ NUEVO MÉTODO PARA SUBIR COMPROBANTE DE COMPRA MASIVA
+    private static function uploadPaymentMassiveProofToS3Admin(CreateAdminMassivePurchaseRequest $request): ?string
+    {
+        if ($request->hasFile('payment_proof_url')) {
+            $file = $request->file('payment_proof_url');
+            $fileName = 'payment-proofs/admin-massive-' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            $uploaded = Storage::disk('s3')->put($fileName, file_get_contents($file), [
+                'visibility' => 'public',
+                'ContentType' => $file->getMimeType()
+            ]);
+
+            if ($uploaded) {
+                $url = "https://backend-imagen-br.s3.us-east-2.amazonaws.com/" . $fileName;
+                Log::info('Admin massive payment proof uploaded', ['url' => $url]);
+                return $url;
+            }
+        }
+        return null;
+    }
+
     public function toArray(): array
     {
         return array_filter([
@@ -259,7 +314,7 @@ class DTOsPurchase
             'event_price_id' => $this->event_price_id,
             'payment_method_id' => $this->payment_method_id,
             'quantity' => $this->quantity,
-            'identificacion' => $this->identificacion,  // ✅ Siempre presente
+            'identificacion' => $this->identificacion,
             'email' => $this->email,
             'whatsapp' => $this->whatsapp,
             'currency' => $this->currency,
@@ -292,13 +347,11 @@ class DTOsPurchase
         return $this->quantity;
     }
 
-    // ✅ OBLIGATORIO
     public function getIdentificacion(): string
     {
         return $this->identificacion;
     }
 
-    // ✅ OPCIONALES
     public function getEmail(): ?string
     {
         return $this->email;

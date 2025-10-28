@@ -6,6 +6,7 @@ use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\CheckTicketAvailabilityRequest;
+use App\Http\Requests\Purchase\CreateAdminMassivePurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminRandomPurchaseRequest;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
@@ -288,5 +289,25 @@ class PurchaseController extends Controller
             'error' => $result['message'],
             'data' => $result['data'] ?? []
         ], 422);
+    }
+    public function storeAdminMassive(CreateAdminMassivePurchaseRequest $request)
+    {
+        $autoApprove = $request->input('auto_approve', true);
+
+        $result = $this->PurchaseServices->createAdminRandomPurchase(
+            DTOsPurchase::fromAdminMassivePurchaseRequest($request),
+            $autoApprove
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 201);
     }
 }
