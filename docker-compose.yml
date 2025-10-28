@@ -63,6 +63,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-worker
+    user: "82:82"  # UID:GID de www-data
     command: php artisan queue:work --verbose --tries=3 --timeout=90 --sleep=3 --max-time=3600
     environment:
       # Las MISMAS variables que el servicio web
@@ -121,6 +122,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-scheduler
+    user: "82:82"  # UID:GID de www-data
     command: >
       sh -c "while true; do
         php artisan schedule:run --verbose --no-interaction &

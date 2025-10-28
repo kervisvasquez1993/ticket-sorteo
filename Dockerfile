@@ -64,7 +64,7 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 bootstrap/cache \
     && chmod -R 775 app/secrets
 
-# Script de inicio MEJORADO - CAMBIO: Ejecutar comandos como www-data
+# Script de inicio MEJORADO - SIN QUEUE WORKER (se maneja en docker-compose)
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
@@ -99,9 +99,6 @@ su -s /bin/bash www-data -c "php artisan view:cache" || true\n\
 \n\
 echo "Iniciando PHP-FPM..."\n\
 php-fpm -D\n\
-\n\
-echo "Iniciando Queue Worker en segundo plano..."\n\
-su -s /bin/bash www-data -c "nohup php artisan queue:work --sleep=3 --tries=3 --timeout=90 > /var/www/html/storage/logs/worker.log 2>&1 &"\n\
 \n\
 echo "Iniciando Nginx..."\n\
 nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
