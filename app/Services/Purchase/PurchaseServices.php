@@ -1004,9 +1004,11 @@ class PurchaseServices implements IPurchaseServices
     public function createMassivePurchaseAsync(DTOsPurchase $data, bool $autoApprove = true): array
     {
         try {
+            // 1. Validar evento y precio
             $event = Event::findOrFail($data->getEventId());
             $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
 
+            // 2. Verificar disponibilidad de números
             $availableCount = $this->getAvailableNumbersCount($event);
 
             if ($availableCount < $data->getQuantity()) {
@@ -1016,58 +1018,68 @@ class PurchaseServices implements IPurchaseServices
                 ];
             }
 
+            // 3. Generar transaction_id único
             $transactionId = $this->generateUniqueTransactionId();
 
-            // ✅ ASEGURAR QUE CURRENCY SIEMPRE TENGA UN VALOR
+            // 4. ✅ Asegurar que currency siempre tenga un valor
             $currency = $data->getCurrency() ?? $eventPrice->currency ?? 'USD';
 
+            // 5. ✅ Preparar datos para el job
             $jobData = [
                 'event_id' => $data->getEventId(),
                 'event_price_id' => $data->getEventPriceId(),
                 'payment_method_id' => $data->getPaymentMethodId(),
-                'quantity' => $data->getQuantity(),
-                'identificacion' => $data->getIdentificacion(),
-                'email' => $data->getEmail(),
-                'whatsapp' => $data->getWhatsapp(),
+                'user_id' => $data->getUserId() ?? null,
+                'email' => $data->getEmail() ?? null,
+                'whatsapp' => $data->getWhatsapp() ?? null,
+                'identificacion' => $data->getIdentificacion() ?? null,
                 'currency' => $currency,
-                'user_id' => $data->getUserId(),
-                'payment_reference' => $data->getPaymentReference(),
-                'payment_proof_url' => $data->getPaymentProofUrl(),
+                'quantity' => $data->getQuantity(),
+                'payment_reference' => $data->getPaymentReference() ?? 'ADMIN-MASSIVE-' . $transactionId,
+                'payment_proof_url' => $data->getPaymentProofUrl() ?? null,
             ];
 
+            // 6. ✅ Despachar job con flag de compra administrativa
             \App\Jobs\ProcessMassivePurchaseJob::dispatch(
                 $jobData,
                 $transactionId,
                 $autoApprove,
-                'MASSIVE'
-            );
+                'ADMIN-MASSIVE',
+                true // ✅ isAdminPurchase = true (monto será $0)
+            )->onQueue('massive-purchases');
 
-            Log::info('Compra masiva despachada a background job', [
+            Log::info('🚀 Compra masiva administrativa despachada', [
                 'transaction_id' => $transactionId,
                 'quantity' => $data->getQuantity(),
                 'event_id' => $event->id,
-                'auto_approve' => $autoApprove
+                'auto_approve' => $autoApprove,
+                'is_admin' => true,
+                'amount' => 0.00
             ]);
 
+            // 7. ✅ Retornar respuesta con monto $0
             return [
                 'success' => true,
                 'message' => 'Tu compra de ' . number_format($data->getQuantity()) . ' tickets está siendo procesada en segundo plano.',
                 'data' => [
                     'transaction_id' => $transactionId,
                     'quantity' => $data->getQuantity(),
-                    'total_amount' => $eventPrice->amount * $data->getQuantity(),
+                    'total_amount' => 0.00, // ✅ Compra administrativa sin costo
                     'currency' => $currency,
                     'status' => 'processing',
-                    'estimated_completion' => now()->addMinutes(5)->toDateTimeString(),
+                    'is_admin_purchase' => true, // ✅ Indicador para el frontend
+                    'estimated_completion' => now()->addMinutes(ceil($data->getQuantity() / 100))->toDateTimeString(),
+                    'estimated_time' => $this->estimateProcessingTime($data->getQuantity()),
                     'event' => [
                         'id' => $event->id,
                         'name' => $event->name
                     ]
                 ]
             ];
-        } catch (Exception $exception) {
-            Log::error('Error al despachar compra masiva', [
-                'error' => $exception->getMessage()
+        } catch (\Exception $exception) {
+            Log::error('❌ Error al despachar compra masiva administrativa', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString()
             ]);
 
             return [
@@ -1075,6 +1087,21 @@ class PurchaseServices implements IPurchaseServices
                 'message' => 'Error al iniciar el procesamiento: ' . $exception->getMessage()
             ];
         }
+    }
+
+    /**
+     * ✅ NUEVO: Método helper para estimar tiempo de procesamiento
+     */
+    private function estimateProcessingTime(int $quantity): string
+    {
+        $seconds = ceil($quantity / 100); // Aproximadamente 100 tickets por segundo
+
+        if ($seconds < 60) {
+            return "{$seconds} segundos";
+        }
+
+        $minutes = ceil($seconds / 60);
+        return "{$minutes} minuto" . ($minutes > 1 ? 's' : '');
     }
 
     /**

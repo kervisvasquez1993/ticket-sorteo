@@ -29,17 +29,20 @@ class ProcessMassivePurchaseJob implements ShouldQueue
     protected string $transactionId;
     protected bool $autoApprove;
     protected string $prefix;
+    protected bool $isAdminPurchase; // ✅ NUEVO
 
     public function __construct(
         array $purchaseData,
         string $transactionId,
         bool $autoApprove = true,
-        string $prefix = 'MASSIVE'
+        string $prefix = 'MASSIVE',
+        bool $isAdminPurchase = true // ✅ NUEVO: Por defecto las compras masivas son administrativas
     ) {
         $this->purchaseData = $purchaseData;
         $this->transactionId = $transactionId;
         $this->autoApprove = $autoApprove;
         $this->prefix = $prefix;
+        $this->isAdminPurchase = $isAdminPurchase; // ✅ NUEVO
         $this->onQueue('massive-purchases');
     }
 
@@ -50,7 +53,8 @@ class ProcessMassivePurchaseJob implements ShouldQueue
             'transaction_id' => $this->transactionId,
             'quantity' => $this->purchaseData['quantity'],
             'event_id' => $this->purchaseData['event_id'],
-            'auto_approve' => $this->autoApprove
+            'auto_approve' => $this->autoApprove,
+            'is_admin_purchase' => $this->isAdminPurchase // ✅ NUEVO
         ]);
         Log::info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
@@ -79,7 +83,12 @@ class ProcessMassivePurchaseJob implements ShouldQueue
             // 3. Determinar status inicial
             $initialStatus = $this->autoApprove ? 'completed' : 'pending';
 
-            // 4. Crear registros en lotes CON números asignados
+            // 4. ✅ Determinar el monto: $0 para compras administrativas, precio real para otras
+            $unitAmount = $this->isAdminPurchase ? 0.00 : $eventPrice->amount;
+
+            Log::info("[{$this->prefix}] 💰 Monto por ticket: " . ($this->isAdminPurchase ? '$0.00 (Compra Administrativa)' : "\${$unitAmount}"));
+
+            // 5. Crear registros en lotes CON números asignados
             $batchSize = 500;
             $totalInserted = 0;
             $assignedNumbers = array_slice($availableNumbers, 0, $requestedQuantity);
@@ -93,9 +102,9 @@ class ProcessMassivePurchaseJob implements ShouldQueue
                 $purchaseRecords = [];
                 foreach ($batchNumbers as $ticketNumber) {
                     $purchaseRecords[] = $this->preparePurchaseRecord(
-                        $eventPrice->amount,
+                        $unitAmount, // ✅ Usar el monto determinado
                         $initialStatus,
-                        $ticketNumber // ✅ ASIGNAR NÚMERO
+                        $ticketNumber
                     );
                 }
 
@@ -108,18 +117,25 @@ class ProcessMassivePurchaseJob implements ShouldQueue
                 gc_collect_cycles();
             }
 
-            // 5. Generar QR Code
+            // 6. Generar QR Code
             $qrImageUrl = $this->generatePurchaseQRCode();
             if ($qrImageUrl) {
                 $purchaseRepository->updateQrCodeByTransaction($this->transactionId, $qrImageUrl);
+                Log::info("[{$this->prefix}] ✅ QR Code generado y actualizado");
             }
 
             DB::commit();
 
-            Log::info("[{$this->prefix}] 🎉 COMPRA MASIVA COMPLETADA: {$totalInserted} tickets con números asignados");
+            $totalAmount = $unitAmount * $requestedQuantity;
 
-            // 6. Enviar notificación
-            $this->dispatchNotification($eventPrice->amount * $requestedQuantity, $event);
+            Log::info("[{$this->prefix}] 🎉 COMPRA MASIVA COMPLETADA", [
+                'tickets_created' => $totalInserted,
+                'total_amount' => $totalAmount,
+                'is_admin' => $this->isAdminPurchase
+            ]);
+
+            // 7. ✅ ENVIAR NOTIFICACIÓN (CORREGIDO)
+            $this->dispatchNotification($totalAmount, $event);
 
         } catch (Exception $exception) {
             DB::rollBack();
@@ -156,7 +172,7 @@ class ProcessMassivePurchaseJob implements ShouldQueue
     }
 
     /**
-     * ✅ MODIFICADO: Ahora incluye ticket_number
+     * ✅ MODIFICADO: Incluye ticket_number y is_admin_purchase
      */
     private function preparePurchaseRecord(float $amount, string $status, string $ticketNumber): array
     {
@@ -169,14 +185,15 @@ class ProcessMassivePurchaseJob implements ShouldQueue
             'whatsapp' => $this->purchaseData['whatsapp'] ?? null,
             'identificacion' => $this->purchaseData['identificacion'] ?? null,
             'currency' => $this->purchaseData['currency'],
-            'amount' => $amount,
+            'amount' => $amount, // ✅ Puede ser 0 para compras administrativas
             'total_amount' => $amount,
             'quantity' => 1,
-            'ticket_number' => $ticketNumber, // ✅ NÚMERO ASIGNADO
+            'ticket_number' => $ticketNumber,
             'transaction_id' => $this->transactionId,
-            'payment_reference' => $this->purchaseData['payment_reference'] ?? null,
+            'payment_reference' => $this->purchaseData['payment_reference'] ?? 'ADMIN-MASSIVE',
             'payment_proof_url' => $this->purchaseData['payment_proof_url'] ?? null,
             'status' => $status,
+            'is_admin_purchase' => $this->isAdminPurchase, // ✅ NUEVO campo
             'created_at' => now(),
             'updated_at' => now(),
         ];
@@ -215,24 +232,44 @@ class ProcessMassivePurchaseJob implements ShouldQueue
         }
     }
 
+    /**
+     * ✅ CORREGIDO: Enviar notificación con toda la información necesaria
+     */
     private function dispatchNotification(float $totalAmount, Event $event): void
     {
         try {
-            SendPurchaseNotificationJob::dispatch([
+            // ✅ Preparar datos completos para la notificación
+            $notificationData = [
                 'transaction_id' => $this->transactionId,
                 'quantity' => $this->purchaseData['quantity'],
                 'total_amount' => $totalAmount,
                 'client_email' => $this->purchaseData['email'] ?? null,
                 'client_whatsapp' => $this->purchaseData['whatsapp'] ?? null,
+                'client_identificacion' => $this->purchaseData['identificacion'] ?? null,
                 'event_id' => $event->id,
                 'event_name' => $event->name,
-            ], 'massive');
+                'currency' => $this->purchaseData['currency'],
+                'payment_method_id' => $this->purchaseData['payment_method_id'],
+                'status' => $this->autoApprove ? 'completed' : 'pending',
+                'is_admin_purchase' => $this->isAdminPurchase,
+                'created_at' => now()->toDateTimeString(),
+            ];
 
-            Log::info("[{$this->prefix}] ✅ Notificación despachada");
+            // ✅ Despachar el job de notificación
+            SendPurchaseNotificationJob::dispatch($notificationData, 'massive')
+                ->onQueue('notifications'); // ✅ Cola específica para notificaciones
+
+            Log::info("[{$this->prefix}] ✅ Notificación despachada exitosamente", [
+                'transaction_id' => $this->transactionId,
+                'queue' => 'notifications'
+            ]);
+
         } catch (\Exception $e) {
+            // ⚠️ No fallar el job principal si falla la notificación
             Log::warning("[{$this->prefix}] ⚠️ No se pudo despachar notificación", [
                 'transaction_id' => $this->transactionId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }
@@ -244,6 +281,7 @@ class ProcessMassivePurchaseJob implements ShouldQueue
             'transaction_id' => $this->transactionId,
             'quantity' => $this->purchaseData['quantity'],
             'event_id' => $this->purchaseData['event_id'],
+            'is_admin_purchase' => $this->isAdminPurchase,
             'error' => $exception->getMessage(),
             'file' => $exception->getFile(),
             'line' => $exception->getLine()

@@ -35,76 +35,46 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
                     }
                 },
             ],
+
+            // ✅ event_price_id es requerido pero solo para referencia, no para cobro
             'event_price_id' => [
                 'required',
                 'integer',
                 'exists:event_prices,id',
                 function ($attribute, $value, $fail) {
                     $eventPrice = \App\Models\EventPrice::find($value);
-                    if ($eventPrice && !$eventPrice->is_active) {
-                        $fail('El precio seleccionado no está disponible.');
-                    }
                     if ($eventPrice && $this->input('event_id') && $eventPrice->event_id != $this->input('event_id')) {
                         $fail('El precio no corresponde al evento seleccionado.');
                     }
                 },
             ],
+
             'payment_method_id' => [
                 'required',
                 'integer',
                 'exists:payment_methods,id',
-                function ($attribute, $value, $fail) {
-                    $paymentMethod = \App\Models\PaymentMethod::find($value);
-                    if ($paymentMethod && !$paymentMethod->is_active) {
-                        $fail('El método de pago seleccionado no está disponible.');
-                    }
-                },
             ],
+
             'quantity' => [
                 'required',
                 'integer',
                 'min:1',
-                // ✅ SIN LÍMITE MÁXIMO - Para compras masivas administrativas
+                // ✅ SIN LÍMITE MÁXIMO para compras administrativas masivas
             ],
+
+            // ✅ Currency es opcional o puede ser cualquiera ya que no hay cobro real
             'currency' => [
-                'required',
+                'nullable',
                 'string',
                 Rule::in(['USD', 'VES']),
-                function ($attribute, $value, $fail) {
-                    $paymentMethodId = $this->input('payment_method_id');
-
-                    if (!$paymentMethodId) {
-                        return;
-                    }
-
-                    $paymentMethod = \App\Models\PaymentMethod::find($paymentMethodId);
-
-                    if (!$paymentMethod) {
-                        return;
-                    }
-
-                    $allowedCurrencies = [
-                        'pago_movil' => ['VES'],
-                        'zelle' => ['USD'],
-                        'binance' => ['USD'],
-                    ];
-
-                    $methodType = $paymentMethod->type;
-
-                    if (isset($allowedCurrencies[$methodType])) {
-                        if (!in_array($value, $allowedCurrencies[$methodType])) {
-                            $allowed = implode(' o ', $allowedCurrencies[$methodType]);
-                            $methodName = $paymentMethod->name;
-                            $fail("El método de pago '{$methodName}' solo acepta pagos en {$allowed}. Por favor, selecciona un precio en la moneda correcta.");
-                        }
-                    }
-                },
             ],
+
             'payment_reference' => [
                 'nullable',
                 'string',
                 'max:255',
             ],
+
             'payment_proof_url' => [
                 'nullable',
                 'file',
@@ -126,6 +96,7 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
                 'max:255',
                 'required_without:whatsapp',
             ],
+
             'whatsapp' => [
                 'nullable',
                 'string',
@@ -146,13 +117,10 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
         return [
             'event_id.required' => 'El evento es obligatorio.',
             'event_id.exists' => 'El evento seleccionado no existe.',
-            'event_price_id.required' => 'El precio es obligatorio.',
+            'event_price_id.required' => 'Debes seleccionar un tipo de precio.',
             'payment_method_id.required' => 'El método de pago es obligatorio.',
             'quantity.required' => 'La cantidad es obligatoria.',
-            'quantity.min' => 'Debe comprar al menos 1 ticket.',
-            // ✅ Sin mensaje de máximo
-            'currency.required' => 'La moneda es obligatoria.',
-            'currency.in' => 'La moneda debe ser USD o VES.',
+            'quantity.min' => 'Debe crear al menos 1 ticket.',
 
             'identificacion.required' => 'La cédula de identidad es obligatoria.',
             'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
@@ -169,6 +137,19 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
             'auto_approve.boolean' => 'El campo auto_approve debe ser verdadero o falso.',
         ];
+    }
+
+    /**
+     * ✅ Preparar datos para validación
+     * - Si no se envía currency, usar USD por defecto
+     * - Establecer valores predeterminados
+     */
+    protected function prepareForValidation()
+    {
+        $this->merge([
+            'currency' => $this->currency ?? 'USD',
+            'auto_approve' => $this->auto_approve ?? true,
+        ]);
     }
 
     public function failedValidation(Validator $validator)

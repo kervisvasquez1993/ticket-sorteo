@@ -18,16 +18,18 @@ return new class extends Migration
             $table->foreignId('event_price_id')->constrained()->onDelete('cascade');
             $table->foreignId('payment_method_id')->constrained()->onDelete('cascade');
             $table->string('ticket_number')->nullable();
-            $table->decimal('amount', 10, 2);
             $table->string('currency', 10);
+            $table->decimal('amount', 10, 2)->default(0); // ✅ Sin ->change()
+            $table->decimal('total_amount', 10, 2)->default(0); // ✅ Sin ->change()
             $table->enum('status', ['processing', 'pending', 'completed', 'failed', 'refunded'])->default('pending');
+            $table->boolean('is_admin_purchase')->default(false); // ✅ Sin ->after()
             $table->string('transaction_id')->nullable();
             $table->string('payment_reference')->nullable();
             $table->text('payment_proof_url')->nullable();
             $table->string('qr_code_url')->nullable();
             $table->integer('quantity')->default(1);
-            $table->decimal('total_amount', 10, 2)->nullable();
             $table->timestamps();
+
             // Índices
             $table->unique(['event_id', 'ticket_number']);
             $table->index(['event_id', 'status']);

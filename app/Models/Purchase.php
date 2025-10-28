@@ -28,11 +28,13 @@ class Purchase extends Model
         'email',
         'whatsapp',
         'identificacion',
+        'is_admin_purchase', // ✅ NUEVO
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'is_admin_purchase' => 'boolean', // ✅ NUEVO
     ];
 
     // ====================================================================
@@ -91,7 +93,6 @@ class Purchase extends Model
         return $this->whatsapp;
     }
 
-    // ✅ NUEVO: Obtener identificación
     public function getCustomerIdentificacion(): ?string
     {
         return $this->identificacion;
@@ -103,14 +104,28 @@ class Purchase extends Model
             'name' => $this->getCustomerName(),
             'email' => $this->getCustomerEmail(),
             'whatsapp' => $this->getCustomerWhatsapp(),
-            'identificacion' => $this->getCustomerIdentificacion(), // ✅ NUEVO
+            'identificacion' => $this->getCustomerIdentificacion(),
             'is_authenticated' => $this->hasAuthenticatedUser(),
             'user_id' => $this->user_id,
         ];
     }
 
     // ====================================================================
-    // QUERY SCOPES - OPTIMIZADOS PARA POSTGRESQL
+    // ✅ NUEVOS MÉTODOS PARA COMPRAS ADMINISTRATIVAS
+    // ====================================================================
+
+    public function isAdminPurchase(): bool
+    {
+        return $this->is_admin_purchase === true;
+    }
+
+    public function isRegularPurchase(): bool
+    {
+        return !$this->isAdminPurchase();
+    }
+
+    // ====================================================================
+    // QUERY SCOPES
     // ====================================================================
 
     public function scopeByTransaction(Builder $query, string $transactionId): Builder
@@ -134,7 +149,6 @@ class Purchase extends Model
         return $query->where('event_id', $eventId);
     }
 
-    // ✅ NUEVO: Búsqueda optimizada por identificación
     public function scopeByIdentificacion(Builder $query, string $identificacion): Builder
     {
         return $query->where('identificacion', $identificacion);
@@ -146,7 +160,6 @@ class Purchase extends Model
             ->when($whatsapp, fn($q) => $q->where('whatsapp', $whatsapp));
     }
 
-    // ✅ NUEVO: Búsqueda completa por cualquier dato de contacto
     public function scopeByAnyContact(Builder $query, ?string $email = null, ?string $whatsapp = null, ?string $identificacion = null): Builder
     {
         return $query->where(function ($q) use ($email, $whatsapp, $identificacion) {
@@ -160,6 +173,33 @@ class Purchase extends Model
                 $q->orWhere('identificacion', $identificacion);
             }
         });
+    }
+
+    // ✅ NUEVOS SCOPES PARA FILTRAR COMPRAS ADMINISTRATIVAS
+
+    /**
+     * Filtrar solo compras administrativas (monto $0)
+     */
+    public function scopeAdminPurchases(Builder $query): Builder
+    {
+        return $query->where('is_admin_purchase', true);
+    }
+
+    /**
+     * Filtrar solo compras regulares (con pago real)
+     */
+    public function scopeRegularPurchases(Builder $query): Builder
+    {
+        return $query->where('is_admin_purchase', false);
+    }
+
+    /**
+     * Excluir compras administrativas de los cálculos financieros
+     */
+    public function scopeForFinancialReports(Builder $query): Builder
+    {
+        return $query->where('is_admin_purchase', false)
+            ->where('status', 'completed');
     }
 
     // ====================================================================
@@ -183,10 +223,18 @@ class Purchase extends Model
         return self::where('transaction_id', $this->transaction_id)->count();
     }
 
-    public function getTransactionTotalAmount(): float
+    /**
+     * ✅ MODIFICADO: Obtener monto total real (excluyendo compras admin si se requiere)
+     */
+    public function getTransactionTotalAmount(bool $includeAdminPurchases = true): float
     {
-        return (float) self::where('transaction_id', $this->transaction_id)
-            ->sum('amount');
+        $query = self::where('transaction_id', $this->transaction_id);
+
+        if (!$includeAdminPurchases) {
+            $query->where('is_admin_purchase', false);
+        }
+
+        return (float) $query->sum('amount');
     }
 
     public function isTransactionCompleted(): bool
@@ -231,12 +279,13 @@ class Purchase extends Model
             'event_id' => $first->event_id,
             'email' => $first->email,
             'whatsapp' => $first->whatsapp,
-            'identificacion' => $first->identificacion, // ✅ NUEVO
+            'identificacion' => $first->identificacion,
             'ticket_numbers' => $purchases->pluck('ticket_number')->toArray(),
             'total_tickets' => $purchases->count(),
             'total_amount' => $purchases->sum('amount'),
             'status' => $purchases->pluck('status')->unique()->toArray(),
             'qr_code_url' => $first->qr_code_url,
+            'is_admin_purchase' => $first->is_admin_purchase, // ✅ NUEVO
             'created_at' => $first->created_at,
         ];
     }
@@ -265,20 +314,54 @@ class Purchase extends Model
     }
 
     // ====================================================================
-    // POSTGRESQL ESPECÍFICO: BÚSQUEDAS AVANZADAS
+    // ✅ MÉTODOS PARA REPORTES FINANCIEROS (EXCLUYENDO COMPRAS ADMIN)
     // ====================================================================
 
-    // ✅ MEJORADO: Búsqueda full-text incluyendo identificación
+    /**
+     * Obtener ingresos reales de un evento (sin compras administrativas)
+     */
+    public static function getEventRevenue(int $eventId): float
+    {
+        return (float) self::where('event_id', $eventId)
+            ->where('status', 'completed')
+            ->where('is_admin_purchase', false) // ✅ Excluir admin
+            ->sum('amount');
+    }
+
+    /**
+     * Obtener cantidad de tickets vendidos (vs regalados)
+     */
+    public static function getEventSalesStats(int $eventId): array
+    {
+        $total = self::where('event_id', $eventId)->count();
+        $sold = self::where('event_id', $eventId)
+            ->where('is_admin_purchase', false)
+            ->count();
+        $admin = self::where('event_id', $eventId)
+            ->where('is_admin_purchase', true)
+            ->count();
+
+        return [
+            'total_tickets' => $total,
+            'sold_tickets' => $sold,
+            'admin_tickets' => $admin,
+            'revenue' => self::getEventRevenue($eventId),
+        ];
+    }
+
+    // ====================================================================
+    // BÚSQUEDAS AVANZADAS
+    // ====================================================================
+
     public static function fullTextSearch(string $searchTerm)
     {
         return self::where(function ($query) use ($searchTerm) {
             $query->where('email', 'ILIKE', "%{$searchTerm}%")
                 ->orWhere('whatsapp', 'LIKE', "%{$searchTerm}%")
-                ->orWhere('identificacion', 'LIKE', "%{$searchTerm}%"); // ✅ NUEVO
+                ->orWhere('identificacion', 'LIKE', "%{$searchTerm}%");
         })->get();
     }
 
-    // ✅ NUEVO: Buscar todas las compras por cédula
     public static function getByIdentificacion(string $identificacion)
     {
         return self::with(['event', 'eventPrice', 'paymentMethod'])
@@ -296,7 +379,8 @@ class Purchase extends Model
                 MAX(status) as status,
                 MIN(created_at) as created_at,
                 MAX(email) as email,
-                MAX(identificacion) as identificacion
+                MAX(identificacion) as identificacion,
+                MAX(is_admin_purchase) as is_admin_purchase
             ')
             ->where('event_id', $eventId)
             ->whereNotNull('transaction_id')
@@ -312,14 +396,6 @@ class Purchase extends Model
             ->exists();
     }
 
-    /**
-     * ✅ NUEVO: Obtener información básica de un ticket reservado
-     * Solo retorna campos no sensibles para verificación de disponibilidad
-     *
-     * @param int $eventId
-     * @param string $ticketNumber
-     * @return Purchase|null
-     */
     public static function getTicketBasicInfo(int $eventId, string $ticketNumber): ?Purchase
     {
         return self::select([
@@ -327,6 +403,7 @@ class Purchase extends Model
             'event_id',
             'ticket_number',
             'status',
+            'is_admin_purchase',
             'created_at'
         ])
             ->where('event_id', $eventId)
