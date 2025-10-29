@@ -57,13 +57,12 @@ services:
       timeout: 10s
       retries: 3
 
-  # ✅ WORKER 1: Procesa notificaciones (cola default)
-  worker-notifications:
+  # ✅ WORKER UNIFICADO: Procesa ambas colas (massive-purchases y default)
+  worker:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: laravel-worker-notifications
-    # SIN user específico - usará root para permisos iniciales
+    container_name: laravel-worker
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
@@ -76,83 +75,9 @@ services:
         echo "🔄 Esperando que la base de datos esté lista..."
         sleep 10
 
-        echo "🚀 Iniciando worker de notificaciones como www-data..."
-        # Ejecutar como www-data
-        su -s /bin/bash www-data -c "php artisan queue:work --verbose --tries=3 --timeout=90 --sleep=3 --max-time=3600"
-    environment:
-      - APP_NAME=${APP_NAME}
-      - APP_ENV=${APP_ENV:-production}
-      - APP_KEY=${APP_KEY}
-      - APP_DEBUG=${APP_DEBUG:-false}
-      - APP_URL=${APP_URL}
-
-      - DB_CONNECTION=${DB_CONNECTION:-pgsql}
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_DATABASE=${DB_DATABASE}
-      - DB_USERNAME=${DB_USERNAME}
-      - DB_PASSWORD=${DB_PASSWORD}
-
-      - CACHE_DRIVER=${CACHE_DRIVER:-redis}
-      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-database}
-      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
-
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-null}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-
-      - MAIL_MAILER=${MAIL_MAILER}
-      - MAIL_HOST=${MAIL_HOST}
-      - MAIL_PORT=${MAIL_PORT}
-      - MAIL_USERNAME=${MAIL_USERNAME}
-      - MAIL_PASSWORD=${MAIL_PASSWORD}
-      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION}
-      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}
-      - MAIL_FROM_NAME=${MAIL_FROM_NAME}
-
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-      - AWS_BUCKET=${AWS_BUCKET}
-
-    volumes:
-      - ./storage:/var/www/html/storage
-      - ./bootstrap/cache:/var/www/html/bootstrap/cache
-    networks:
-      - laravel-network
-    depends_on:
-      web:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "queue:work"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ✅ WORKER 2: Procesa compras masivas (cola massive-purchases)
-  worker-massive-purchases:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: laravel-worker-massive
-    # SIN user específico - usará root para permisos iniciales
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        # Configurar permisos como root
-        chown -R www-data:www-data /var/www/html/storage
-        chown -R www-data:www-data /var/www/html/bootstrap/cache
-        chmod -R 775 /var/www/html/storage
-        chmod -R 775 /var/www/html/bootstrap/cache
-
-        echo "🔄 Esperando que la base de datos esté lista..."
-        sleep 10
-
-        echo "🚀 Iniciando worker de compras masivas como www-data..."
-        # Ejecutar como www-data
-        su -s /bin/bash www-data -c "php artisan queue:work --queue=massive-purchases --verbose --tries=1 --timeout=300 --sleep=3 --max-time=3600"
+        echo "🚀 Iniciando worker unificado (massive-purchases + default) como www-data..."
+        # Ejecutar como www-data - procesa ambas colas con prioridad
+        su -s /bin/bash www-data -c "php artisan queue:work --queue=massive-purchases,default --verbose --tries=3 --timeout=300 --sleep=3 --max-time=3600"
     environment:
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
