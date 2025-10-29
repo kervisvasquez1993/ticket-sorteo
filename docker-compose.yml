@@ -57,28 +57,15 @@ services:
       timeout: 10s
       retries: 3
 
-  # ✅ WORKER UNIFICADO: Procesa ambas colas (massive-purchases y default)
+  # Servicio Worker (procesa colas en segundo plano)
   worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-worker
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        # Configurar permisos como root
-        chown -R www-data:www-data /var/www/html/storage
-        chown -R www-data:www-data /var/www/html/bootstrap/cache
-        chmod -R 775 /var/www/html/storage
-        chmod -R 775 /var/www/html/bootstrap/cache
-
-        echo "🔄 Esperando que la base de datos esté lista..."
-        sleep 10
-
-        echo "🚀 Iniciando worker unificado (massive-purchases + default) como www-data..."
-        # Ejecutar como www-data - procesa ambas colas con prioridad
-        su -s /bin/bash www-data -c "php artisan queue:work --queue=massive-purchases,default --verbose --tries=3 --timeout=300 --sleep=3 --max-time=3600"
+    command: php artisan queue:work --verbose --tries=3 --timeout=90 --sleep=3 --max-time=3600
     environment:
+      # Las MISMAS variables que el servicio web
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
       - APP_KEY=${APP_KEY}
@@ -120,15 +107,13 @@ services:
     networks:
       - laravel-network
     depends_on:
-      web:
-        condition: service_healthy
+      - web
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "queue:work"]
+      test: ["CMD", "php", "artisan", "queue:work", "--once"]
       interval: 60s
-      timeout: 10s
+      timeout: 30s
       retries: 3
-      start_period: 30s
 
   # Servicio Scheduler (cron de Laravel - OPCIONAL)
   scheduler:
@@ -136,24 +121,13 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-scheduler
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        # Configurar permisos como root
-        chown -R www-data:www-data /var/www/html/storage
-        chown -R www-data:www-data /var/www/html/bootstrap/cache
-        chmod -R 775 /var/www/html/storage
-        chmod -R 775 /var/www/html/bootstrap/cache
-
-        echo "🔄 Esperando que la aplicación esté lista..."
-        sleep 15
-
-        echo "🚀 Iniciando scheduler como www-data..."
-        while true; do
-          su -s /bin/bash www-data -c "php artisan schedule:run --verbose --no-interaction"
-          sleep 60
-        done
+    command: >
+      sh -c "while true; do
+        php artisan schedule:run --verbose --no-interaction &
+        sleep 60
+      done"
     environment:
+      # Las MISMAS variables que web y worker
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
       - APP_KEY=${APP_KEY}
@@ -181,8 +155,7 @@ services:
     networks:
       - laravel-network
     depends_on:
-      web:
-        condition: service_healthy
+      - web
     restart: unless-stopped
 
 networks:
