@@ -63,7 +63,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-worker
-    command: php artisan queue:work --verbose --tries=3 --timeout=90 --sleep=3 --max-time=3600
+    command: php artisan queue:work --queue=massive-purchases,default --verbose --tries=3 --timeout=300
     environment:
       # Las MISMAS variables que el servicio web
       - APP_NAME=${APP_NAME}
