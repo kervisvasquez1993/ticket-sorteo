@@ -195,7 +195,7 @@ class DTOsPurchase
 
         $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
         $quantity = $validated['quantity'];
-        $totalAmount = $eventPrice->amount * $quantity;
+        $totalAmount = 0.00; // ✅ Siempre $0 para compras administrativas masivas
 
         return new self(
             event_id: $validated['event_id'],
@@ -203,14 +203,14 @@ class DTOsPurchase
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
             identificacion: $validated['identificacion'],
-            email: $validated['email'] ?? null,
-            whatsapp: $validated['whatsapp'] ?? null,
+            email: null, // ✅ FORZADO A NULL - No se envía email
+            whatsapp: null, // ✅ FORZADO A NULL - No se envía WhatsApp
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::id(),
-            specific_numbers: null, // Para compras masivas aleatorias
+            specific_numbers: null,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
-            total_amount: $totalAmount,
+            total_amount: $totalAmount, // ✅ Monto ya establecido en $0
         );
     }
 

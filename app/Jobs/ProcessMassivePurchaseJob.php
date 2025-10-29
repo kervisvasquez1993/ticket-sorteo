@@ -74,7 +74,7 @@ class ProcessMassivePurchaseJob implements ShouldQueue
             if (count($availableNumbers) < $requestedQuantity) {
                 throw new Exception(
                     "No hay suficientes números disponibles. Solicitados: {$requestedQuantity}, " .
-                    "Disponibles: " . count($availableNumbers)
+                        "Disponibles: " . count($availableNumbers)
                 );
             }
 
@@ -136,7 +136,6 @@ class ProcessMassivePurchaseJob implements ShouldQueue
 
             // 7. ✅ ENVIAR NOTIFICACIÓN (CORREGIDO)
             $this->dispatchNotification($totalAmount, $event);
-
         } catch (Exception $exception) {
             DB::rollBack();
 
@@ -238,13 +237,12 @@ class ProcessMassivePurchaseJob implements ShouldQueue
     private function dispatchNotification(float $totalAmount, Event $event): void
     {
         try {
-            // ✅ Preparar datos completos para la notificación
             $notificationData = [
                 'transaction_id' => $this->transactionId,
                 'quantity' => $this->purchaseData['quantity'],
                 'total_amount' => $totalAmount,
-                'client_email' => $this->purchaseData['email'] ?? null,
-                'client_whatsapp' => $this->purchaseData['whatsapp'] ?? null,
+                'client_email' => $this->purchaseData['email'] ?? null, // ✅ Será null
+                'client_whatsapp' => $this->purchaseData['whatsapp'] ?? null, // ✅ Será null
                 'client_identificacion' => $this->purchaseData['identificacion'] ?? null,
                 'event_id' => $event->id,
                 'event_name' => $event->name,
@@ -255,21 +253,18 @@ class ProcessMassivePurchaseJob implements ShouldQueue
                 'created_at' => now()->toDateTimeString(),
             ];
 
-            // ✅ Despachar el job de notificación
+            // ✅ Si no hay email ni whatsapp, el job de notificación debe manejarlo
             SendPurchaseNotificationJob::dispatch($notificationData, 'massive')
-                ->onQueue('notifications'); // ✅ Cola específica para notificaciones
+                ->onQueue('notifications');
 
-            Log::info("[{$this->prefix}] ✅ Notificación despachada exitosamente", [
+            Log::info("[{$this->prefix}] ✅ Notificación despachada (sin contacto del cliente)", [
                 'transaction_id' => $this->transactionId,
-                'queue' => 'notifications'
+                'has_email' => !is_null($this->purchaseData['email']),
+                'has_whatsapp' => !is_null($this->purchaseData['whatsapp']),
             ]);
-
         } catch (\Exception $e) {
-            // ⚠️ No fallar el job principal si falla la notificación
             Log::warning("[{$this->prefix}] ⚠️ No se pudo despachar notificación", [
-                'transaction_id' => $this->transactionId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error' => $e->getMessage()
             ]);
         }
     }

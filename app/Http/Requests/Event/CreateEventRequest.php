@@ -21,11 +21,9 @@ class CreateEventRequest extends FormRequest
             'description' => 'nullable|string',
             'start_number' => 'required|integer|min:0',
             'end_number' => 'required|integer|gt:start_number',
-            'start_date' => 'required|date|after_or_equal:today',
+            'start_date' => 'required|date', // ✅ Sin restricción de fecha mínima
             'end_date' => 'required|date|after:start_date',
             'status' => 'nullable|in:active,completed,cancelled',
-
-            // ✅ Imagen ahora es REQUERIDA
             'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ];
     }
@@ -35,11 +33,10 @@ class CreateEventRequest extends FormRequest
         return [
             'name.required' => 'El nombre del evento es obligatorio',
             'end_number.gt' => 'El número final debe ser mayor que el número inicial',
-            'start_date.after_or_equal' => 'La fecha de inicio debe ser hoy o posterior',
+            'start_date.required' => 'La fecha de inicio es obligatoria', // ✅ Mensaje actualizado
+            'start_date.date' => 'La fecha de inicio debe ser una fecha válida',
             'end_date.after' => 'La fecha de fin debe ser posterior a la fecha de inicio',
-
-            // Mensajes para imagen
-            'image.required' => 'La imagen del evento es obligatoria', // ✅ Nuevo mensaje
+            'image.required' => 'La imagen del evento es obligatoria',
             'image.image' => 'El archivo debe ser una imagen válida',
             'image.mimes' => 'La imagen debe ser de tipo: jpeg, png, jpg, gif o webp',
             'image.max' => 'La imagen no debe superar los 2MB',

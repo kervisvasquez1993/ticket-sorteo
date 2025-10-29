@@ -36,7 +36,6 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
                 },
             ],
 
-            // ✅ event_price_id es requerido pero solo para referencia, no para cobro
             'event_price_id' => [
                 'required',
                 'integer',
@@ -59,10 +58,8 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'min:1',
-                // ✅ SIN LÍMITE MÁXIMO para compras administrativas masivas
             ],
 
-            // ✅ Currency es opcional o puede ser cualquiera ya que no hay cobro real
             'currency' => [
                 'nullable',
                 'string',
@@ -82,19 +79,17 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
                 'max:5120',
             ],
 
-            // ✅ IDENTIFICACIÓN: OBLIGATORIA
             'identificacion' => [
                 'required',
                 'string',
                 'max:20',
             ],
 
-            // ✅ EMAIL y WHATSAPP: OPCIONALES pero AL MENOS UNO OBLIGATORIO
+            // ✅ MODIFICADO: Ahora ambos son completamente opcionales
             'email' => [
                 'nullable',
                 'email:rfc,dns',
                 'max:255',
-                'required_without:whatsapp',
             ],
 
             'whatsapp' => [
@@ -102,7 +97,6 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
                 'string',
                 'regex:/^\+?[1-9]\d{1,14}$/',
                 'max:20',
-                'required_without:email',
             ],
 
             'auto_approve' => [
@@ -111,7 +105,6 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
             ],
         ];
     }
-
     public function messages(): array
     {
         return [
@@ -121,18 +114,12 @@ class CreateAdminMassivePurchaseRequest extends FormRequest
             'payment_method_id.required' => 'El método de pago es obligatorio.',
             'quantity.required' => 'La cantidad es obligatoria.',
             'quantity.min' => 'Debe crear al menos 1 ticket.',
-
             'identificacion.required' => 'La cédula de identidad es obligatoria.',
             'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
-
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
-            'email.required_without' => 'Debes proporcionar al menos un email o un WhatsApp.',
-
-            'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
+            'whatsapp.regex' => 'El formato del número de WhatsApp no es válido.',
             'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
-            'whatsapp.required_without' => 'Debes proporcionar al menos un WhatsApp o un email.',
-
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
             'auto_approve.boolean' => 'El campo auto_approve debe ser verdadero o falso.',
