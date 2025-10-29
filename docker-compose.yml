@@ -63,8 +63,22 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-worker-notifications
-    user: "82:82"
-    command: php artisan queue:work --verbose --tries=3 --timeout=90 --sleep=3 --max-time=3600
+    # SIN user específico - usará root para permisos iniciales
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        # Configurar permisos como root
+        chown -R www-data:www-data /var/www/html/storage
+        chown -R www-data:www-data /var/www/html/bootstrap/cache
+        chmod -R 775 /var/www/html/storage
+        chmod -R 775 /var/www/html/bootstrap/cache
+
+        echo "🔄 Esperando que la base de datos esté lista..."
+        sleep 10
+
+        echo "🚀 Iniciando worker de notificaciones como www-data..."
+        # Ejecutar como www-data
+        su -s /bin/bash www-data -c "php artisan queue:work --verbose --tries=3 --timeout=90 --sleep=3 --max-time=3600"
     environment:
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
@@ -107,13 +121,15 @@ services:
     networks:
       - laravel-network
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "php", "artisan", "queue:work", "--once"]
+      test: ["CMD", "pgrep", "-f", "queue:work"]
       interval: 60s
-      timeout: 30s
+      timeout: 10s
       retries: 3
+      start_period: 30s
 
   # ✅ WORKER 2: Procesa compras masivas (cola massive-purchases)
   worker-massive-purchases:
@@ -121,8 +137,22 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-worker-massive
-    user: "82:82"
-    command: php artisan queue:work --queue=massive-purchases --verbose --tries=1 --timeout=300 --sleep=3 --max-time=3600
+    # SIN user específico - usará root para permisos iniciales
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        # Configurar permisos como root
+        chown -R www-data:www-data /var/www/html/storage
+        chown -R www-data:www-data /var/www/html/bootstrap/cache
+        chmod -R 775 /var/www/html/storage
+        chmod -R 775 /var/www/html/bootstrap/cache
+
+        echo "🔄 Esperando que la base de datos esté lista..."
+        sleep 10
+
+        echo "🚀 Iniciando worker de compras masivas como www-data..."
+        # Ejecutar como www-data
+        su -s /bin/bash www-data -c "php artisan queue:work --queue=massive-purchases --verbose --tries=1 --timeout=300 --sleep=3 --max-time=3600"
     environment:
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
@@ -165,13 +195,15 @@ services:
     networks:
       - laravel-network
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "php", "artisan", "queue:work", "--queue=massive-purchases", "--once"]
+      test: ["CMD", "pgrep", "-f", "queue:work"]
       interval: 60s
-      timeout: 30s
+      timeout: 10s
       retries: 3
+      start_period: 30s
 
   # Servicio Scheduler (cron de Laravel - OPCIONAL)
   scheduler:
@@ -179,12 +211,23 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-scheduler
-    user: "82:82"
-    command: >
-      sh -c "while true; do
-        php artisan schedule:run --verbose --no-interaction &
-        sleep 60
-      done"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        # Configurar permisos como root
+        chown -R www-data:www-data /var/www/html/storage
+        chown -R www-data:www-data /var/www/html/bootstrap/cache
+        chmod -R 775 /var/www/html/storage
+        chmod -R 775 /var/www/html/bootstrap/cache
+
+        echo "🔄 Esperando que la aplicación esté lista..."
+        sleep 15
+
+        echo "🚀 Iniciando scheduler como www-data..."
+        while true; do
+          su -s /bin/bash www-data -c "php artisan schedule:run --verbose --no-interaction"
+          sleep 60
+        done
     environment:
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
@@ -213,7 +256,8 @@ services:
     networks:
       - laravel-network
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     restart: unless-stopped
 
 networks:

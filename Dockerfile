@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y \
     libmagickwand-dev \
     zip \
     unzip \
-    nginx
+    nginx \
+    procps
 
 # Limpiar cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -77,12 +78,12 @@ chmod -R 775 /var/www/html/bootstrap/cache\n\
 chmod -R 775 /var/www/html/app/secrets\n\
 \n\
 echo "Limpiando caches..."\n\
-su -s /bin/bash www-data -c "php artisan config:clear" || true\n\
-su -s /bin/bash www-data -c "php artisan cache:clear" || true\n\
+php artisan config:clear || true\n\
+php artisan cache:clear || true\n\
 \n\
 echo "Generando llaves de Passport en app/secrets/oauth..."\n\
 if [ ! -f /var/www/html/app/secrets/oauth/oauth-private.key ]; then\n\
-    su -s /bin/bash www-data -c "php artisan passport:keys --force"\n\
+    php artisan passport:keys --force\n\
     if [ -f /var/www/html/storage/oauth-private.key ]; then\n\
         mv /var/www/html/storage/oauth-private.key /var/www/html/app/secrets/oauth/\n\
         mv /var/www/html/storage/oauth-public.key /var/www/html/app/secrets/oauth/\n\
@@ -93,9 +94,9 @@ if [ ! -f /var/www/html/app/secrets/oauth/oauth-private.key ]; then\n\
 fi\n\
 \n\
 echo "Cacheando configuración..."\n\
-su -s /bin/bash www-data -c "php artisan config:cache" || true\n\
-su -s /bin/bash www-data -c "php artisan route:cache" || true\n\
-su -s /bin/bash www-data -c "php artisan view:cache" || true\n\
+php artisan config:cache || true\n\
+php artisan route:cache || true\n\
+php artisan view:cache || true\n\
 \n\
 echo "Iniciando PHP-FPM..."\n\
 php-fpm -D\n\
