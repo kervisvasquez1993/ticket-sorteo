@@ -57,16 +57,15 @@ services:
       timeout: 10s
       retries: 3
 
-  # Servicio Worker (procesa colas en segundo plano)
-  worker:
+  # ✅ WORKER 1: Procesa notificaciones (cola default)
+  worker-notifications:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: laravel-worker
-    user: "82:82"  # UID:GID de www-data
+    container_name: laravel-worker-notifications
+    user: "82:82"
     command: php artisan queue:work --verbose --tries=3 --timeout=90 --sleep=3 --max-time=3600
     environment:
-      # Las MISMAS variables que el servicio web
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
       - APP_KEY=${APP_KEY}
@@ -116,20 +115,77 @@ services:
       timeout: 30s
       retries: 3
 
+  # ✅ WORKER 2: Procesa compras masivas (cola massive-purchases)
+  worker-massive-purchases:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel-worker-massive
+    user: "82:82"
+    command: php artisan queue:work --queue=massive-purchases --verbose --tries=1 --timeout=300 --sleep=3 --max-time=3600
+    environment:
+      - APP_NAME=${APP_NAME}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=${APP_KEY}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - APP_URL=${APP_URL}
+
+      - DB_CONNECTION=${DB_CONNECTION:-pgsql}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+      - CACHE_DRIVER=${CACHE_DRIVER:-redis}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-database}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
+
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-null}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+
+      - MAIL_MAILER=${MAIL_MAILER}
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME}
+
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - AWS_BUCKET=${AWS_BUCKET}
+
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    networks:
+      - laravel-network
+    depends_on:
+      - web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "php", "artisan", "queue:work", "--queue=massive-purchases", "--once"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+
   # Servicio Scheduler (cron de Laravel - OPCIONAL)
   scheduler:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-scheduler
-    user: "82:82"  # UID:GID de www-data
+    user: "82:82"
     command: >
       sh -c "while true; do
         php artisan schedule:run --verbose --no-interaction &
         sleep 60
       done"
     environment:
-      # Las MISMAS variables que web y worker
       - APP_NAME=${APP_NAME}
       - APP_ENV=${APP_ENV:-production}
       - APP_KEY=${APP_KEY}
