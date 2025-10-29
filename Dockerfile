@@ -101,7 +101,7 @@ echo "Iniciando PHP-FPM..."\n\
 php-fpm -D\n\
 \n\
 echo "Iniciando Queue Worker en segundo plano..."\n\
-su -s /bin/bash www-data -c "nohup php artisan queue:work --sleep=3 --tries=3 --timeout=90 > /var/www/html/storage/logs/worker.log 2>&1 &"\n\
+su -s /bin/bash www-data -c "nohup php artisan queue:work --queue=massive-purchases,default --verbose --tries=3 --timeout=300 > /var/www/html/storage/logs/worker.log 2>&1 &"\n\
 \n\
 echo "Iniciando Nginx..."\n\
 nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
