@@ -293,29 +293,7 @@ class PurchaseController extends Controller
     public function storeAdminMassive(CreateAdminMassivePurchaseRequest $request)
     {
         $autoApprove = $request->input('auto_approve', true);
-        $quantity = $request->input('quantity');
-
-        if ($quantity > 500) {
-            $result = $this->PurchaseServices->createMassivePurchaseAsync(
-                DTOsPurchase::fromAdminMassivePurchaseRequest($request),
-                $autoApprove
-            );
-
-            if (!$result['success']) {
-                return response()->json([
-                    'error' => $result['message']
-                ], 422);
-            }
-
-            return response()->json([
-                'message' => $result['message'],
-                'data' => $result['data'],
-                'processing_mode' => 'background' // Indicador para el frontend
-            ], 202); // 202 Accepted - Procesamiento iniciado
-        }
-
-        // Para cantidades ≤500, usar método síncrono original
-        $result = $this->PurchaseServices->createAdminRandomPurchase(
+        $result = $this->PurchaseServices->createMassivePurchaseAsync(
             DTOsPurchase::fromAdminMassivePurchaseRequest($request),
             $autoApprove
         );
@@ -329,8 +307,8 @@ class PurchaseController extends Controller
         return response()->json([
             'message' => $result['message'],
             'data' => $result['data'],
-            'processing_mode' => 'synchronous' // Indicador para el frontend
-        ], 201);
+            'processing_mode' => 'background' // Indicador para el frontend
+        ], 202);
     }
     public function storeAdminMassiveAsync(CreateAdminMassivePurchaseRequest $request)
     {
