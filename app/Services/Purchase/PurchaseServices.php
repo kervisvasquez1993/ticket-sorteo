@@ -483,16 +483,31 @@ class PurchaseServices implements IPurchaseServices
         try {
             DB::beginTransaction();
 
-            // ✅ Actualizar usando repository
-            $updatedCount = $this->PurchaseRepository->updateStatusByTransactionAndConditions(
-                $transactionId,
-                'failed',
-                'pending'
-            );
+            // ✅ Obtener las compras antes de modificarlas para saber qué números liberar
+            $purchases = $this->PurchaseRepository->getPurchasesByTransaction($transactionId);
 
-            if ($updatedCount === 0) {
-                throw new Exception('No se encontraron compras pendientes con este transaction_id');
+            if ($purchases->isEmpty()) {
+                throw new Exception('No se encontraron compras con este transaction_id');
             }
+
+            // ✅ Filtrar solo las que están pendientes
+            $pendingPurchases = $purchases->where('status', 'pending');
+
+            if ($pendingPurchases->isEmpty()) {
+                throw new Exception('No hay compras pendientes para rechazar en esta transacción');
+            }
+
+            // ✅ Recopilar números que serán liberados (para log/respuesta)
+            $liberatedNumbers = $pendingPurchases
+                ->whereNotNull('ticket_number')
+                ->pluck('ticket_number')
+                ->toArray();
+
+            // ✅ Rechazar y liberar números usando el repository
+            $updatedCount = $this->PurchaseRepository->rejectPurchaseAndFreeNumbers(
+                $transactionId,
+                $reason
+            );
 
             DB::commit();
 
@@ -502,6 +517,7 @@ class PurchaseServices implements IPurchaseServices
                 'data' => [
                     'transaction_id' => $transactionId,
                     'purchases_count' => $updatedCount,
+                    'liberated_numbers' => $liberatedNumbers, // ✅ Números que fueron liberados
                     'reason' => $reason
                 ]
             ];

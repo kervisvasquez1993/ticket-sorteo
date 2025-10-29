@@ -7,6 +7,8 @@ use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Interfaces\Purchase\IPurchaseRepository;
 use App\Models\Purchase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class PurchaseRepository implements IPurchaseRepository
 {
@@ -122,10 +124,19 @@ class PurchaseRepository implements IPurchaseRepository
     /**
      * ✅ OPTIMIZADO: Verificar múltiples números de ticket de una vez
      */
+    // public function getReservedTicketNumbers(int $eventId, array $ticketNumbers): array
+    // {
+    //     return Purchase::where('event_id', $eventId)
+    //         ->whereIn('ticket_number', $ticketNumbers)
+    //         ->lockForUpdate()
+    //         ->pluck('ticket_number')
+    //         ->toArray();
+    // }
     public function getReservedTicketNumbers(int $eventId, array $ticketNumbers): array
     {
         return Purchase::where('event_id', $eventId)
             ->whereIn('ticket_number', $ticketNumbers)
+            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%') // ✅ Excluir rechazados
             ->lockForUpdate()
             ->pluck('ticket_number')
             ->toArray();
@@ -134,10 +145,18 @@ class PurchaseRepository implements IPurchaseRepository
     /**
      * ✅ OPTIMIZADO: Obtener números usados de un evento
      */
+    // public function getUsedTicketNumbers(int $eventId): array
+    // {
+    //     return Purchase::where('event_id', $eventId)
+    //         ->whereNotNull('ticket_number')
+    //         ->pluck('ticket_number')
+    //         ->toArray();
+    // }
     public function getUsedTicketNumbers(int $eventId): array
     {
         return Purchase::where('event_id', $eventId)
             ->whereNotNull('ticket_number')
+            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%') // ✅ Excluir rechazados
             ->pluck('ticket_number')
             ->toArray();
     }
@@ -752,5 +771,60 @@ class PurchaseRepository implements IPurchaseRepository
             'available' => is_null($purchase),
             'purchase' => $purchase
         ];
+    }
+    public function rejectPurchaseAndFreeNumbers(string $transactionId, ?string $reason = null): int
+    {
+        $purchasesToReject = Purchase::where('transaction_id', $transactionId)
+            ->where('status', 'pending')
+            ->get();
+
+        if ($purchasesToReject->isEmpty()) {
+            return 0;
+        }
+
+        $updatedCount = 0;
+        $liberatedNumbers = [];
+        $timestamp = now()->format('YmdHis');
+
+        foreach ($purchasesToReject as $index => $purchase) {
+            $originalNumber = null;
+            if ($purchase->ticket_number && !str_starts_with($purchase->ticket_number, 'RECHAZADO')) {
+                $originalNumber = $purchase->ticket_number;
+                $liberatedNumbers[] = $originalNumber;
+            }
+            if ($originalNumber) {
+                $rejectionTicketNumber = "{$originalNumber}-RECHAZADO-{$timestamp}-" . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
+            } else {
+                $rejectionTicketNumber = "SIN_NUMERO-RECHAZADO-{$timestamp}-" . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
+            }
+
+            // Si hay razón, agregar código corto de la razón
+            if ($reason) {
+                $reasonSlug = Str::limit(Str::slug($reason), 20, '');
+                $rejectionTicketNumber .= "-{$reasonSlug}";
+            }
+
+            // Actualizar compra
+            $purchase->update([
+                'status' => 'failed',
+                'ticket_number' => $rejectionTicketNumber, // ✅ Número único y claro
+                'payment_reference' => $reason
+                    ? "RECHAZADO: {$reason}"
+                    : "RECHAZADO: Compra no aprobada",
+                'updated_at' => now()
+            ]);
+
+            $updatedCount++;
+        }
+
+        Log::info('Compras rechazadas con números únicos', [
+            'transaction_id' => $transactionId,
+            'liberated_numbers' => $liberatedNumbers,
+            'total_rejected' => $updatedCount,
+            'reason' => $reason,
+            'timestamp' => $timestamp
+        ]);
+
+        return $updatedCount;
     }
 }

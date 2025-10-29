@@ -257,4 +257,5 @@ interface IPurchaseRepository
 
     public function getPurchasesByIdentificacion(string $identificacion);
     public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
+    public function rejectPurchaseAndFreeNumbers(string $transactionId, ?string $reason = null): int;
 }

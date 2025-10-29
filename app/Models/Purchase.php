@@ -410,4 +410,11 @@ class Purchase extends Model
             ->where('ticket_number', $ticketNumber)
             ->first();
     }
+    public function scopeExcludeRejected(Builder $query): Builder
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('ticket_number')
+                ->orWhere('ticket_number', 'NOT LIKE', 'RECHAZADO%');
+        });
+    }
 }
