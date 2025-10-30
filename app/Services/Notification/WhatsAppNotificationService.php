@@ -75,10 +75,10 @@ class WhatsAppNotificationService
     private function buildApprovalMessage(array $data): string
     {
         return "✅ *¡Tu compra ha sido aprobada!*\n\n" .
-               "Tu transacción de *{$data['quantity']} ticket(s)* fue confirmada exitosamente.\n\n" .
-               "🔗 Ver detalles completos:\n" .
-               "{$data['purchase_url']}\n\n" .
-               "¡Gracias por tu compra! 🎉";
+            "Tu transacción de *{$data['quantity']} ticket(s)* fue confirmada exitosamente.\n\n" .
+            "🔗 Ver detalles completos:\n" .
+            "{$data['purchase_url']}\n\n" .
+            "¡Gracias por tu compra! 🎉";
     }
 
     /**
@@ -91,9 +91,9 @@ class WhatsAppNotificationService
             : '';
 
         return "❌ *Tu compra ha sido rechazada*\n\n" .
-               "Lamentablemente tu transacción no pudo ser procesada.{$reasonText}\n\n" .
-               "Para más información, contacta con soporte.\n" .
-               "Disculpa las molestias.";
+            "Lamentablemente tu transacción no pudo ser procesada.{$reasonText}\n\n" .
+            "Para más información, contacta con soporte.\n" .
+            "Disculpa las molestias.";
     }
 
     /**
@@ -116,16 +116,18 @@ class WhatsAppNotificationService
         try {
             $phone = $this->normalizePhoneNumber($whatsapp);
 
+            // ✅ Construir URL completa del endpoint
+            $endpoint = rtrim($this->whatsappServiceUrl, '/') . '/whatsapp/send-notification';
+
             Log::info("📤 Enviando notificación de WhatsApp", [
                 'transaction_id' => $transactionId,
                 'phone' => $phone,
                 'type' => $type,
-                'url' => $this->whatsappServiceUrl
+                'endpoint' => $endpoint
             ]);
 
-            // ✅ Petición HTTP usando Laravel HTTP Client
             $response = Http::timeout($this->timeout)
-                ->post("{$this->whatsappServiceUrl}/whatsapp/send-notification", [
+                ->post($endpoint, [
                     'phone' => $phone,
                     'message' => $message
                 ]);
@@ -156,7 +158,6 @@ class WhatsAppNotificationService
             ]);
 
             return false;
-
         } catch (Exception $exception) {
             Log::error("❌ Excepción al enviar notificación de WhatsApp", [
                 'transaction_id' => $transactionId,
@@ -184,8 +185,9 @@ class WhatsAppNotificationService
     public function isServiceAvailable(): bool
     {
         try {
-            $response = Http::timeout(5)
-                ->get("{$this->whatsappServiceUrl}/whatsapp/status");
+            $endpoint = rtrim($this->whatsappServiceUrl, '/') . '/whatsapp/status';
+
+            $response = Http::timeout(5)->get($endpoint);
 
             return $response->successful();
         } catch (Exception $e) {
