@@ -28,7 +28,7 @@ class Purchase extends Model
         'email',
         'whatsapp',
         'identificacion',
-        'is_admin_purchase', // ✅ NUEVO
+        'is_admin_purchase',
     ];
 
     protected $casts = [

@@ -105,25 +105,25 @@ class AuthRepository implements IAuthRepository
             throw $e;
         }
     }
-    public function getAllUsers(DTOsUserFilter $filters, int $excludeUserId): LengthAwarePaginator
+    public function getAllUsers(DTOsUserFilter $filters, int $authenticatedUserId): LengthAwarePaginator
     {
         try {
             $query = User::query();
 
-            // Excluir el usuario autenticado
-            $query->where('id', '!=', $excludeUserId);
+            // **CAMBIO PRINCIPAL**: Ordenar poniendo primero al usuario autenticado
+            $query->orderByRaw("CASE WHEN id = ? THEN 0 ELSE 1 END", [$authenticatedUserId]);
 
             // Aplicar filtros
             $this->applyFilters($query, $filters);
 
-            // Ordenamiento
+            // Ordenamiento secundario (después del usuario autenticado)
             if ($filters->isValidSortField() && $filters->isValidSortOrder()) {
                 $query->orderBy($filters->getSortBy(), $filters->getSortOrder());
             }
 
             Log::info('Listando usuarios', [
                 'filters' => $filters->toArray(),
-                'excluded_user_id' => $excludeUserId
+                'authenticated_user_first' => $authenticatedUserId
             ]);
 
             return $query->paginate(
