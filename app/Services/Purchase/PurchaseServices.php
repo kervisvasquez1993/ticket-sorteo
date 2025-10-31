@@ -405,13 +405,20 @@ class PurchaseServices implements IPurchaseServices
 
             // ✅ ENVIAR NOTIFICACIÓN DE WHATSAPP (después del commit exitoso)
             $firstPurchase = $purchases->first();
+            $notificationSent = false;
+            $notificationStatus = 'not_attempted';
+
             if (!empty($firstPurchase->whatsapp)) {
-                $this->whatsappNotification->sendApprovalNotification(
+                $notificationSent = $this->whatsappNotification->sendApprovalNotification(
                     $firstPurchase->whatsapp,
                     $transactionId,
                     $assignedNumbers,
                     $purchases->count()
                 );
+
+                $notificationStatus = $notificationSent ? 'sent_successfully' : 'failed_to_send';
+            } else {
+                $notificationStatus = 'no_whatsapp_provided';
             }
 
             return [
@@ -422,7 +429,11 @@ class PurchaseServices implements IPurchaseServices
                     'purchases_count' => $purchases->count(),
                     'assigned_numbers' => $assignedNumbers,
                     'status' => 'completed',
-                    'notification_sent' => !empty($firstPurchase->whatsapp)
+                    'whatsapp_notification' => [
+                        'sent' => $notificationSent,
+                        'status' => $notificationStatus,
+                        'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                    ]
                 ]
             ];
         } catch (Exception $exception) {
@@ -443,6 +454,9 @@ class PurchaseServices implements IPurchaseServices
     }
     /**
      * ✅ OPTIMIZADO: Aprobar compra con números ya asignados (Repository)
+     */
+    /**
+     * ✅ Aprobar compra individual con notificación de WhatsApp
      */
     public function approveSinglePurchase(string $transactionId): array
     {
@@ -467,13 +481,20 @@ class PurchaseServices implements IPurchaseServices
 
             // ✅ ENVIAR NOTIFICACIÓN DE WHATSAPP
             $firstPurchase = $purchases->first();
+            $notificationSent = false;
+            $notificationStatus = 'not_attempted';
+
             if (!empty($firstPurchase->whatsapp)) {
-                $this->whatsappNotification->sendApprovalNotification(
+                $notificationSent = $this->whatsappNotification->sendApprovalNotification(
                     $firstPurchase->whatsapp,
                     $transactionId,
                     $ticketNumbers,
                     $updatedCount
                 );
+
+                $notificationStatus = $notificationSent ? 'sent_successfully' : 'failed_to_send';
+            } else {
+                $notificationStatus = 'no_whatsapp_provided';
             }
 
             return [
@@ -484,7 +505,11 @@ class PurchaseServices implements IPurchaseServices
                     'quantity' => $updatedCount,
                     'ticket_numbers' => $ticketNumbers,
                     'status' => 'completed',
-                    'notification_sent' => !empty($firstPurchase->whatsapp)
+                    'whatsapp_notification' => [
+                        'sent' => $notificationSent,
+                        'status' => $notificationStatus,
+                        'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                    ]
                 ]
             ];
         } catch (Exception $exception) {
@@ -492,8 +517,9 @@ class PurchaseServices implements IPurchaseServices
             return ['success' => false, 'message' => $exception->getMessage()];
         }
     }
+
     /**
-     * ✅ OPTIMIZADO: Rechazar compra (Repository)
+     * ✅ Rechazar compra con notificación de WhatsApp
      */
     public function rejectPurchase(string $transactionId, string|null $reason = null): array
     {
@@ -526,12 +552,19 @@ class PurchaseServices implements IPurchaseServices
 
             // ✅ ENVIAR NOTIFICACIÓN DE RECHAZO POR WHATSAPP
             $firstPurchase = $purchases->first();
+            $notificationSent = false;
+            $notificationStatus = 'not_attempted';
+
             if (!empty($firstPurchase->whatsapp)) {
-                $this->whatsappNotification->sendRejectionNotification(
+                $notificationSent = $this->whatsappNotification->sendRejectionNotification(
                     $firstPurchase->whatsapp,
                     $transactionId,
                     $reason
                 );
+
+                $notificationStatus = $notificationSent ? 'sent_successfully' : 'failed_to_send';
+            } else {
+                $notificationStatus = 'no_whatsapp_provided';
             }
 
             return [
@@ -542,7 +575,11 @@ class PurchaseServices implements IPurchaseServices
                     'purchases_count' => $updatedCount,
                     'liberated_numbers' => $liberatedNumbers,
                     'reason' => $reason,
-                    'notification_sent' => !empty($firstPurchase->whatsapp)
+                    'whatsapp_notification' => [
+                        'sent' => $notificationSent,
+                        'status' => $notificationStatus,
+                        'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                    ]
                 ]
             ];
         } catch (Exception $exception) {
@@ -555,7 +592,6 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
-
 
     // ====================================================================
     // MÉTODOS DE CONSULTA

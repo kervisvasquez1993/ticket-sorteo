@@ -53,7 +53,8 @@ class WhatsAppNotificationService
         $message = $this->buildApprovalMessage([
             'transaction_id' => $transactionId,
             'quantity' => $quantity,
-            'purchase_url' => $purchaseUrl
+            'purchase_url' => $purchaseUrl,
+            'ticket_numbers' => $ticketNumbers
         ]);
 
         return $this->sendNotification($whatsapp, $message, $transactionId, 'approval');
@@ -83,19 +84,25 @@ class WhatsAppNotificationService
     }
 
     /**
-     * Construir mensaje de aprobación (versión corta)
+     * Construir mensaje de aprobación con enlace clickeable
      */
     private function buildApprovalMessage(array $data): string
     {
+        $ticketsText = count($data['ticket_numbers']) <= 3
+            ? implode(', ', $data['ticket_numbers'])
+            : count($data['ticket_numbers']) . ' tickets';
+
         return "✅ *¡Tu compra ha sido aprobada!*\n\n" .
-               "Tu transacción de *{$data['quantity']} ticket(s)* fue confirmada exitosamente.\n\n" .
-               "🔗 Ver detalles completos:\n" .
-               "{$data['purchase_url']}\n\n" .
-               "¡Gracias por tu compra! 🎉";
+            "🎫 *Tickets:* {$ticketsText}\n" .
+            "📦 *Cantidad:* {$data['quantity']} ticket(s)\n\n" .
+            "👉 *Ver detalles de tu compra:*\n" .
+            "{$data['purchase_url']}\n\n" .
+            "_(Haz clic en el enlace para ver todos los detalles)_\n\n" .
+            "¡Gracias por tu compra! 🎉";
     }
 
     /**
-     * Construir mensaje de rechazo (versión corta)
+     * Construir mensaje de rechazo
      */
     private function buildRejectionMessage(array $data): string
     {
@@ -104,9 +111,9 @@ class WhatsAppNotificationService
             : '';
 
         return "❌ *Tu compra ha sido rechazada*\n\n" .
-               "Lamentablemente tu transacción no pudo ser procesada.{$reasonText}\n\n" .
-               "Para más información, contacta con soporte.\n" .
-               "Disculpa las molestias.";
+            "Lamentablemente tu transacción no pudo ser procesada.{$reasonText}\n\n" .
+            "Para más información, contacta con soporte.\n" .
+            "Disculpa las molestias.";
     }
 
     /**
@@ -179,7 +186,6 @@ class WhatsAppNotificationService
             ]);
 
             return false;
-
         } catch (GuzzleException $exception) {
             Log::error("❌ Excepción Guzzle al enviar notificación de WhatsApp", [
                 'transaction_id' => $transactionId,
