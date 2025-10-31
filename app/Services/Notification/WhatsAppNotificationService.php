@@ -3,7 +3,8 @@
 namespace App\Services\Notification;
 
 use Exception;
-use Illuminate\Support\Facades\Http;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
 
 class WhatsAppNotificationService
@@ -11,12 +12,24 @@ class WhatsAppNotificationService
     private string $whatsappServiceUrl;
     private string $frontendUrl;
     private int $timeout;
+    private Client $httpClient;
 
     public function __construct()
     {
         $this->whatsappServiceUrl = config('services.whatsapp.url');
         $this->frontendUrl = config('app.frontend_url');
         $this->timeout = config('services.whatsapp.timeout', 10);
+
+        // ✅ Configurar Guzzle con opciones específicas
+        $this->httpClient = new Client([
+            'timeout' => $this->timeout,
+            'verify' => false, // Deshabilitar verificación SSL (solo en desarrollo/testing)
+            'http_errors' => false, // No lanzar excepciones en errores HTTP
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ]
+        ]);
     }
 
     /**
@@ -75,10 +88,10 @@ class WhatsAppNotificationService
     private function buildApprovalMessage(array $data): string
     {
         return "✅ *¡Tu compra ha sido aprobada!*\n\n" .
-            "Tu transacción de *{$data['quantity']} ticket(s)* fue confirmada exitosamente.\n\n" .
-            "🔗 Ver detalles completos:\n" .
-            "{$data['purchase_url']}\n\n" .
-            "¡Gracias por tu compra! 🎉";
+               "Tu transacción de *{$data['quantity']} ticket(s)* fue confirmada exitosamente.\n\n" .
+               "🔗 Ver detalles completos:\n" .
+               "{$data['purchase_url']}\n\n" .
+               "¡Gracias por tu compra! 🎉";
     }
 
     /**
@@ -91,9 +104,9 @@ class WhatsAppNotificationService
             : '';
 
         return "❌ *Tu compra ha sido rechazada*\n\n" .
-            "Lamentablemente tu transacción no pudo ser procesada.{$reasonText}\n\n" .
-            "Para más información, contacta con soporte.\n" .
-            "Disculpa las molestias.";
+               "Lamentablemente tu transacción no pudo ser procesada.{$reasonText}\n\n" .
+               "Para más información, contacta con soporte.\n" .
+               "Disculpa las molestias.";
     }
 
     /**
@@ -105,7 +118,7 @@ class WhatsAppNotificationService
     }
 
     /**
-     * Enviar notificación al servicio de WhatsApp
+     * Enviar notificación al servicio de WhatsApp usando Guzzle
      */
     private function sendNotification(
         string $whatsapp,
@@ -115,9 +128,8 @@ class WhatsAppNotificationService
     ): bool {
         try {
             $phone = $this->normalizePhoneNumber($whatsapp);
-
-            // ✅ Construir URL completa del endpoint
-            $endpoint = rtrim($this->whatsappServiceUrl, '/') . '/whatsapp/send-notification';
+            // ✅ RUTA CORRECTA: /whatsapp/send
+            $endpoint = rtrim($this->whatsappServiceUrl, '/') . '/whatsapp/send';
 
             Log::info("📤 Enviando notificación de WhatsApp", [
                 'transaction_id' => $transactionId,
@@ -126,15 +138,24 @@ class WhatsAppNotificationService
                 'endpoint' => $endpoint
             ]);
 
-            $response = Http::timeout($this->timeout)
-                ->post($endpoint, [
-                    'phone' => $phone,
+            // ✅ PAYLOAD: phoneNumber y message
+            $response = $this->httpClient->post($endpoint, [
+                'json' => [
+                    'phoneNumber' => $phone,
                     'message' => $message
-                ]);
+                ]
+            ]);
 
-            if ($response->successful()) {
-                $body = $response->json();
+            $statusCode = $response->getStatusCode();
+            $body = json_decode($response->getBody()->getContents(), true);
 
+            Log::info("📥 Respuesta del servicio de WhatsApp", [
+                'transaction_id' => $transactionId,
+                'status' => $statusCode,
+                'body' => $body
+            ]);
+
+            if ($statusCode >= 200 && $statusCode < 300) {
                 if (isset($body['success']) && $body['success']) {
                     Log::info("✅ Notificación enviada exitosamente", [
                         'transaction_id' => $transactionId,
@@ -153,13 +174,24 @@ class WhatsAppNotificationService
 
             Log::error("❌ Error en la respuesta del servicio de WhatsApp", [
                 'transaction_id' => $transactionId,
-                'status' => $response->status(),
-                'body' => $response->body()
+                'status' => $statusCode,
+                'body' => $body
+            ]);
+
+            return false;
+
+        } catch (GuzzleException $exception) {
+            Log::error("❌ Excepción Guzzle al enviar notificación de WhatsApp", [
+                'transaction_id' => $transactionId,
+                'phone' => $whatsapp,
+                'type' => $type,
+                'error' => $exception->getMessage(),
+                'code' => $exception->getCode()
             ]);
 
             return false;
         } catch (Exception $exception) {
-            Log::error("❌ Excepción al enviar notificación de WhatsApp", [
+            Log::error("❌ Excepción general al enviar notificación de WhatsApp", [
                 'transaction_id' => $transactionId,
                 'phone' => $whatsapp,
                 'type' => $type,
@@ -185,11 +217,12 @@ class WhatsAppNotificationService
     public function isServiceAvailable(): bool
     {
         try {
+            // ✅ Endpoint de status (ajusta según tu API)
             $endpoint = rtrim($this->whatsappServiceUrl, '/') . '/whatsapp/status';
 
-            $response = Http::timeout(5)->get($endpoint);
+            $response = $this->httpClient->get($endpoint);
 
-            return $response->successful();
+            return $response->getStatusCode() >= 200 && $response->getStatusCode() < 300;
         } catch (Exception $e) {
             Log::warning("⚠️ Servicio de WhatsApp no disponible: " . $e->getMessage());
             return false;
