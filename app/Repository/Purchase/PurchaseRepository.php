@@ -772,59 +772,91 @@ class PurchaseRepository implements IPurchaseRepository
             'purchase' => $purchase
         ];
     }
+    // En PurchaseRepository.php
+
     public function rejectPurchaseAndFreeNumbers(string $transactionId, ?string $reason = null): int
     {
-        $purchasesToReject = Purchase::where('transaction_id', $transactionId)
-            ->where('status', 'pending')
-            ->get();
+        DB::beginTransaction();
 
-        if ($purchasesToReject->isEmpty()) {
-            return 0;
-        }
+        try {
+            $timestamp = now()->format('YmdHis');
 
-        $updatedCount = 0;
-        $liberatedNumbers = [];
-        $timestamp = now()->format('YmdHis');
+            // 1. Obtener compras pendientes
+            $purchasesToReject = Purchase::where('transaction_id', $transactionId)
+                ->where('status', 'pending')
+                ->get();
 
-        foreach ($purchasesToReject as $index => $purchase) {
-            $originalNumber = null;
-            if ($purchase->ticket_number && !str_starts_with($purchase->ticket_number, 'RECHAZADO')) {
-                $originalNumber = $purchase->ticket_number;
-                $liberatedNumbers[] = $originalNumber;
-            }
-            if ($originalNumber) {
-                $rejectionTicketNumber = "{$originalNumber}-RECHAZADO-{$timestamp}-" . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
-            } else {
-                $rejectionTicketNumber = "SIN_NUMERO-RECHAZADO-{$timestamp}-" . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
+            if ($purchasesToReject->isEmpty()) {
+                DB::rollBack();
+                return 0;
             }
 
-            // Si hay razón, agregar código corto de la razón
-            if ($reason) {
-                $reasonSlug = Str::limit(Str::slug($reason), 20, '');
-                $rejectionTicketNumber .= "-{$reasonSlug}";
+            $liberatedNumbers = [];
+            $updatedIds = [];
+
+            // 2. Preparar datos para cada compra
+            foreach ($purchasesToReject as $index => $purchase) {
+                $originalNumber = null;
+
+                // Capturar número original si existe y no está rechazado
+                if ($purchase->ticket_number && !str_starts_with($purchase->ticket_number, 'RECHAZADO')) {
+                    $originalNumber = $purchase->ticket_number;
+                    $liberatedNumbers[] = $originalNumber;
+                }
+
+                // Crear número de rechazo único
+                if ($originalNumber) {
+                    $rejectionTicketNumber = "RECHAZADO-{$originalNumber}-{$timestamp}-" . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
+                } else {
+                    $rejectionTicketNumber = "RECHAZADO-SIN_NUMERO-{$timestamp}-" . str_pad($index + 1, 3, '0', STR_PAD_LEFT);
+                }
+
+                // Agregar razón si existe
+                if ($reason) {
+                    $reasonSlug = Str::limit(Str::slug($reason), 20, '');
+                    $rejectionTicketNumber .= "-{$reasonSlug}";
+                }
+
+                // 3. ✅ ACTUALIZAR USANDO QUERY BUILDER DIRECTO (más confiable)
+                $affected = DB::table('purchases')
+                    ->where('id', $purchase->id)
+                    ->where('status', 'pending') // Double-check
+                    ->update([
+                        'status' => 'failed',
+                        'ticket_number' => $rejectionTicketNumber,
+                        'payment_reference' => $reason
+                            ? "RECHAZADO: {$reason}"
+                            : "RECHAZADO: Compra no aprobada",
+                        'updated_at' => now()
+                    ]);
+
+                if ($affected > 0) {
+                    $updatedIds[] = $purchase->id;
+                }
             }
 
-            // Actualizar compra
-            $purchase->update([
-                'status' => 'failed',
-                'ticket_number' => $rejectionTicketNumber, // ✅ Número único y claro
-                'payment_reference' => $reason
-                    ? "RECHAZADO: {$reason}"
-                    : "RECHAZADO: Compra no aprobada",
-                'updated_at' => now()
+            DB::commit();
+
+            Log::info('✅ Compras rechazadas exitosamente', [
+                'transaction_id' => $transactionId,
+                'liberated_numbers' => $liberatedNumbers,
+                'total_rejected' => count($updatedIds),
+                'updated_ids' => $updatedIds,
+                'reason' => $reason,
+                'timestamp' => $timestamp
             ]);
 
-            $updatedCount++;
+            return count($updatedIds);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('❌ Error rechazando compras', [
+                'transaction_id' => $transactionId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            throw $e;
         }
-
-        Log::info('Compras rechazadas con números únicos', [
-            'transaction_id' => $transactionId,
-            'liberated_numbers' => $liberatedNumbers,
-            'total_rejected' => $updatedCount,
-            'reason' => $reason,
-            'timestamp' => $timestamp
-        ]);
-
-        return $updatedCount;
     }
 }

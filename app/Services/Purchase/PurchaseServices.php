@@ -16,6 +16,7 @@ use App\Jobs\SendPurchaseNotificationJob;
 use App\Interfaces\Purchase\IPurchaseServices;
 use Illuminate\Validation\ValidationException;
 use App\Interfaces\Purchase\IPurchaseRepository;
+use App\Services\Notification\EmailNotificationService;
 use App\Services\Notification\WhatsAppNotificationService;
 use SimpleSoftwareIO\QrCode\Facades\QrCode as QrCodeGenerator;
 
@@ -23,13 +24,16 @@ class PurchaseServices implements IPurchaseServices
 {
     protected IPurchaseRepository $PurchaseRepository;
     protected WhatsAppNotificationService $whatsappNotification;
+    protected EmailNotificationService $emailNotification;
 
     public function __construct(
         IPurchaseRepository $PurchaseRepositoryInterface,
-        WhatsAppNotificationService $whatsappNotification
+        WhatsAppNotificationService $whatsappNotification,
+        EmailNotificationService $emailNotification
     ) {
         $this->PurchaseRepository = $PurchaseRepositoryInterface;
         $this->whatsappNotification = $whatsappNotification;
+        $this->emailNotification = $emailNotification;
     }
 
 
@@ -360,6 +364,9 @@ class PurchaseServices implements IPurchaseServices
     /**
      * ✅ OPTIMIZADO: Aprobar compra con números aleatorios (Repository)
      */
+    /**
+     * ✅ CORREGIDO: Aprobar compra (detecta si tiene números o necesita asignar aleatorios)
+     */
     public function approvePurchase(string $transactionId): array
     {
         try {
@@ -375,50 +382,102 @@ class PurchaseServices implements IPurchaseServices
             }
 
             $event = Event::findOrFail($purchases->first()->event_id);
-            $usedNumbers = $this->PurchaseRepository->getUsedTicketNumbers($event->id);
-            $allNumbers = range($event->start_number, $event->end_number);
-            $availableNumbers = array_diff($allNumbers, $usedNumbers);
 
-            if (count($availableNumbers) < $purchases->count()) {
-                throw new Exception('No hay suficientes números disponibles para esta transacción.');
-            }
+            // ✅ DETECTAR: ¿Ya tienen números asignados o necesitan números aleatorios?
+            $purchasesWithNumbers = $purchases->filter(fn($p) => !is_null($p->ticket_number));
+            $purchasesWithoutNumbers = $purchases->filter(fn($p) => is_null($p->ticket_number));
 
             $assignedNumbers = [];
-            $availableNumbersArray = array_values($availableNumbers);
 
-            foreach ($purchases as $purchase) {
-                if (empty($availableNumbersArray)) {
-                    throw new Exception('Se agotaron los números disponibles durante la asignación.');
+            // ========================================================================
+            // CASO 1: SI TIENEN NÚMEROS ASIGNADOS → Solo cambiar status a 'completed'
+            // ========================================================================
+            if ($purchasesWithNumbers->isNotEmpty()) {
+                foreach ($purchasesWithNumbers as $purchase) {
+                    $this->PurchaseRepository->assignTicketNumber(
+                        $purchase->id,
+                        $purchase->ticket_number, // ✅ Mantener el número original
+                        'completed'
+                    );
+                    $assignedNumbers[] = $purchase->ticket_number;
                 }
 
-                $randomIndex = array_rand($availableNumbersArray);
-                $assignedNumber = $availableNumbersArray[$randomIndex];
+                Log::info('✅ Compra con números específicos aprobada', [
+                    'transaction_id' => $transactionId,
+                    'assigned_numbers' => $assignedNumbers
+                ]);
+            }
 
-                $this->PurchaseRepository->assignTicketNumber($purchase->id, $assignedNumber, 'completed');
+            // ========================================================================
+            // CASO 2: SI NO TIENEN NÚMEROS → Asignar números aleatorios
+            // ========================================================================
+            if ($purchasesWithoutNumbers->isNotEmpty()) {
+                $usedNumbers = $this->PurchaseRepository->getUsedTicketNumbers($event->id);
+                $allNumbers = range($event->start_number, $event->end_number);
+                $availableNumbers = array_diff($allNumbers, $usedNumbers);
 
-                $assignedNumbers[] = $assignedNumber;
-                unset($availableNumbersArray[$randomIndex]);
-                $availableNumbersArray = array_values($availableNumbersArray);
+                if (count($availableNumbers) < $purchasesWithoutNumbers->count()) {
+                    throw new Exception('No hay suficientes números disponibles para esta transacción.');
+                }
+
+                $availableNumbersArray = array_values($availableNumbers);
+
+                foreach ($purchasesWithoutNumbers as $purchase) {
+                    if (empty($availableNumbersArray)) {
+                        throw new Exception('Se agotaron los números disponibles durante la asignación.');
+                    }
+
+                    $randomIndex = array_rand($availableNumbersArray);
+                    $assignedNumber = $availableNumbersArray[$randomIndex];
+
+                    $this->PurchaseRepository->assignTicketNumber($purchase->id, $assignedNumber, 'completed');
+
+                    $assignedNumbers[] = $assignedNumber;
+                    unset($availableNumbersArray[$randomIndex]);
+                    $availableNumbersArray = array_values($availableNumbersArray);
+                }
+
+                Log::info('✅ Compra con números aleatorios aprobada', [
+                    'transaction_id' => $transactionId,
+                    'assigned_numbers' => $assignedNumbers
+                ]);
             }
 
             DB::commit();
 
-            // ✅ ENVIAR NOTIFICACIÓN DE WHATSAPP (después del commit exitoso)
             $firstPurchase = $purchases->first();
-            $notificationSent = false;
-            $notificationStatus = 'not_attempted';
 
+            // ✅ ENVIAR NOTIFICACIONES (Email y WhatsApp)
+            $emailSent = false;
+            $whatsappSent = false;
+            $emailStatus = 'not_attempted';
+            $whatsappStatus = 'not_attempted';
+
+            // Intentar enviar email si está disponible
+            if (!empty($firstPurchase->email)) {
+                $emailSent = $this->emailNotification->sendApprovalNotification(
+                    $firstPurchase->email,
+                    $transactionId,
+                    $assignedNumbers,
+                    $purchases->count(),
+                    $event->name
+                );
+                $emailStatus = $emailSent ? 'sent_successfully' : 'failed_to_send';
+            } else {
+                $emailStatus = 'no_email_provided';
+            }
+
+            // Intentar enviar WhatsApp si está disponible
             if (!empty($firstPurchase->whatsapp)) {
-                $notificationSent = $this->whatsappNotification->sendApprovalNotification(
+                $whatsappSent = $this->whatsappNotification->sendApprovalNotification(
                     $firstPurchase->whatsapp,
                     $transactionId,
                     $assignedNumbers,
                     $purchases->count()
                 );
-
-                $notificationStatus = $notificationSent ? 'sent_successfully' : 'failed_to_send';
+                $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
             } else {
-                $notificationStatus = 'no_whatsapp_provided';
+                $whatsappStatus = 'no_whatsapp_provided';
             }
 
             return [
@@ -429,10 +488,18 @@ class PurchaseServices implements IPurchaseServices
                     'purchases_count' => $purchases->count(),
                     'assigned_numbers' => $assignedNumbers,
                     'status' => 'completed',
-                    'whatsapp_notification' => [
-                        'sent' => $notificationSent,
-                        'status' => $notificationStatus,
-                        'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                    'had_specific_numbers' => $purchasesWithNumbers->isNotEmpty(), // ✅ Indicador
+                    'notifications' => [
+                        'email' => [
+                            'sent' => $emailSent,
+                            'status' => $emailStatus,
+                            'address' => !empty($firstPurchase->email) ? $firstPurchase->email : null
+                        ],
+                        'whatsapp' => [
+                            'sent' => $whatsappSent,
+                            'status' => $whatsappStatus,
+                            'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                        ]
                     ]
                 ]
             ];
@@ -476,25 +543,40 @@ class PurchaseServices implements IPurchaseServices
 
             $purchases = $this->PurchaseRepository->getPurchasesByTransaction($transactionId);
             $ticketNumbers = $purchases->pluck('ticket_number')->filter()->toArray();
+            $firstPurchase = $purchases->first();
+            $event = Event::findOrFail($firstPurchase->event_id);
 
             DB::commit();
 
-            // ✅ ENVIAR NOTIFICACIÓN DE WHATSAPP
-            $firstPurchase = $purchases->first();
-            $notificationSent = false;
-            $notificationStatus = 'not_attempted';
+            // ✅ ENVIAR NOTIFICACIONES
+            $emailSent = false;
+            $whatsappSent = false;
+            $emailStatus = 'not_attempted';
+            $whatsappStatus = 'not_attempted';
+
+            if (!empty($firstPurchase->email)) {
+                $emailSent = $this->emailNotification->sendApprovalNotification(
+                    $firstPurchase->email,
+                    $transactionId,
+                    $ticketNumbers,
+                    $updatedCount,
+                    $event->name
+                );
+                $emailStatus = $emailSent ? 'sent_successfully' : 'failed_to_send';
+            } else {
+                $emailStatus = 'no_email_provided';
+            }
 
             if (!empty($firstPurchase->whatsapp)) {
-                $notificationSent = $this->whatsappNotification->sendApprovalNotification(
+                $whatsappSent = $this->whatsappNotification->sendApprovalNotification(
                     $firstPurchase->whatsapp,
                     $transactionId,
                     $ticketNumbers,
                     $updatedCount
                 );
-
-                $notificationStatus = $notificationSent ? 'sent_successfully' : 'failed_to_send';
+                $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
             } else {
-                $notificationStatus = 'no_whatsapp_provided';
+                $whatsappStatus = 'no_whatsapp_provided';
             }
 
             return [
@@ -505,10 +587,17 @@ class PurchaseServices implements IPurchaseServices
                     'quantity' => $updatedCount,
                     'ticket_numbers' => $ticketNumbers,
                     'status' => 'completed',
-                    'whatsapp_notification' => [
-                        'sent' => $notificationSent,
-                        'status' => $notificationStatus,
-                        'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                    'notifications' => [
+                        'email' => [
+                            'sent' => $emailSent,
+                            'status' => $emailStatus,
+                            'address' => !empty($firstPurchase->email) ? $firstPurchase->email : null
+                        ],
+                        'whatsapp' => [
+                            'sent' => $whatsappSent,
+                            'status' => $whatsappStatus,
+                            'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                        ]
                     ]
                 ]
             ];
@@ -517,6 +606,7 @@ class PurchaseServices implements IPurchaseServices
             return ['success' => false, 'message' => $exception->getMessage()];
         }
     }
+
 
     /**
      * ✅ Rechazar compra con notificación de WhatsApp
@@ -538,6 +628,9 @@ class PurchaseServices implements IPurchaseServices
                 throw new Exception('No hay compras pendientes para rechazar en esta transacción');
             }
 
+            $firstPurchase = $purchases->first();
+            $event = Event::findOrFail($firstPurchase->event_id);
+
             $liberatedNumbers = $pendingPurchases
                 ->whereNotNull('ticket_number')
                 ->pluck('ticket_number')
@@ -550,21 +643,33 @@ class PurchaseServices implements IPurchaseServices
 
             DB::commit();
 
-            // ✅ ENVIAR NOTIFICACIÓN DE RECHAZO POR WHATSAPP
-            $firstPurchase = $purchases->first();
-            $notificationSent = false;
-            $notificationStatus = 'not_attempted';
+            // ✅ ENVIAR NOTIFICACIONES DE RECHAZO
+            $emailSent = false;
+            $whatsappSent = false;
+            $emailStatus = 'not_attempted';
+            $whatsappStatus = 'not_attempted';
+
+            if (!empty($firstPurchase->email)) {
+                $emailSent = $this->emailNotification->sendRejectionNotification(
+                    $firstPurchase->email,
+                    $transactionId,
+                    $reason,
+                    $event->name
+                );
+                $emailStatus = $emailSent ? 'sent_successfully' : 'failed_to_send';
+            } else {
+                $emailStatus = 'no_email_provided';
+            }
 
             if (!empty($firstPurchase->whatsapp)) {
-                $notificationSent = $this->whatsappNotification->sendRejectionNotification(
+                $whatsappSent = $this->whatsappNotification->sendRejectionNotification(
                     $firstPurchase->whatsapp,
                     $transactionId,
                     $reason
                 );
-
-                $notificationStatus = $notificationSent ? 'sent_successfully' : 'failed_to_send';
+                $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
             } else {
-                $notificationStatus = 'no_whatsapp_provided';
+                $whatsappStatus = 'no_whatsapp_provided';
             }
 
             return [
@@ -575,10 +680,17 @@ class PurchaseServices implements IPurchaseServices
                     'purchases_count' => $updatedCount,
                     'liberated_numbers' => $liberatedNumbers,
                     'reason' => $reason,
-                    'whatsapp_notification' => [
-                        'sent' => $notificationSent,
-                        'status' => $notificationStatus,
-                        'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                    'notifications' => [
+                        'email' => [
+                            'sent' => $emailSent,
+                            'status' => $emailStatus,
+                            'address' => !empty($firstPurchase->email) ? $firstPurchase->email : null
+                        ],
+                        'whatsapp' => [
+                            'sent' => $whatsappSent,
+                            'status' => $whatsappStatus,
+                            'phone' => !empty($firstPurchase->whatsapp) ? $firstPurchase->whatsapp : null
+                        ]
                     ]
                 ]
             ];
@@ -592,7 +704,6 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
-
     // ====================================================================
     // MÉTODOS DE CONSULTA
     // ====================================================================
