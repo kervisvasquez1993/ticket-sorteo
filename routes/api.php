@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\EmailController;
 use App\Http\Controllers\Api\Event\EventController;
 use App\Http\Controllers\Api\EventPrice\EventPriceController;
 use App\Http\Controllers\Api\EventPrize\EventPrizeController;
@@ -134,3 +135,6 @@ Route::middleware('auth:api')->group(function () {
         Route::patch('/events-prices/{id}/set-default', [EventPriceController::class, 'setAsDefault']);
     });
 });
+
+Route::post('/send-test-email', [EmailController::class, 'sendTestEmail']);
+Route::post('/send-email-resend', [EmailController::class, 'sendWithResendFacade']);
