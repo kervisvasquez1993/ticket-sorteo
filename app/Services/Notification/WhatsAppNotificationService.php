@@ -20,11 +20,11 @@ class WhatsAppNotificationService
         $this->frontendUrl = config('app.frontend_url');
         $this->timeout = config('services.whatsapp.timeout', 10);
 
-        // ✅ Configurar Guzzle con opciones específicas
+
         $this->httpClient = new Client([
             'timeout' => $this->timeout,
-            'verify' => false, // Deshabilitar verificación SSL (solo en desarrollo/testing)
-            'http_errors' => false, // No lanzar excepciones en errores HTTP
+            'verify' => false,
+            'http_errors' => false,
             'headers' => [
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',

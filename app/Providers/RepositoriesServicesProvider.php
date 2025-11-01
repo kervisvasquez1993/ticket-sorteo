@@ -14,18 +14,22 @@ use App\Interfaces\PaymentMethod\IPaymentMethodRepository;
 use App\Interfaces\PaymentMethod\IPaymentMethodServices;
 use App\Interfaces\Purchase\IPurchaseRepository;
 use App\Interfaces\Purchase\IPurchaseServices;
+use App\Interfaces\WhatsAppStatus\IWhatsAppStatusRepository;
+use App\Interfaces\WhatsAppStatus\IWhatsAppStatusServices;
 use App\Repository\Auth\AuthRepository;
 use App\Repository\Event\EventRepository;
 use App\Repository\EventPrice\EventPriceRepository;
 use App\Repository\EventPrize\EventPrizeRepository;
 use App\Repository\PaymentMethod\PaymentMethodRepository;
 use App\Repository\Purchase\PurchaseRepository;
+use App\Repository\WhatsAppStatus\WhatsAppStatusRepository;
 use App\Services\Auth\AuthServices;
 use App\Services\Event\EventServices;
 use App\Services\EventPrice\EventPriceServices;
 use App\Services\EventPrize\EventPrizeServices;
 use App\Services\PaymentMethod\PaymentMethodServices;
 use App\Services\Purchase\PurchaseServices;
+use App\Services\WhatsAppStatus\WhatsAppStatusServices;
 use Illuminate\Support\ServiceProvider;
 
 class RepositoriesServicesProvider extends ServiceProvider
@@ -35,6 +39,8 @@ class RepositoriesServicesProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(IWhatsAppStatusRepository::class, WhatsAppStatusRepository::class);
+        $this->app->bind(IWhatsAppStatusServices::class, WhatsAppStatusServices::class);
         $this->app->bind(IEventPrizeRepository::class, EventPrizeRepository::class);
         $this->app->bind(IEventPrizeServices::class, EventPrizeServices::class);
         $this->app->bind(IEventPriceRepository::class, EventPriceRepository::class);

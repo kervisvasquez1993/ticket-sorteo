@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\EventPrize\EventPrizeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentMethod\PaymentMethodController;
 use App\Http\Controllers\Api\Purchase\PurchaseController;
+use App\Http\Controllers\Api\WhatsAppStatus\WhatsAppStatusController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -136,5 +137,16 @@ Route::middleware('auth:api')->group(function () {
     });
 });
 
-Route::post('/send-test-email', [EmailController::class, 'sendTestEmail']);
-Route::post('/send-email-resend', [EmailController::class, 'sendWithResendFacade']);
+
+Route::middleware('auth:api')->group(function () {
+    Route::prefix('whatsapp')->group(function () {
+        Route::get('/status', [WhatsAppStatusController::class, 'status'])
+            ->name('whatsapp.status');
+        // Verificar si está conectado
+        Route::get('/is-connected', [WhatsAppStatusController::class, 'isConnected'])
+            ->name('whatsapp.is-connected');
+        // Obtener código QR (si está disponible)
+        Route::get('/qr-code', [WhatsAppStatusController::class, 'qrCode'])
+            ->name('whatsapp.qr-code');
+    });
+});
