@@ -185,12 +185,14 @@ class CreatePurchaseRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:255',
+                'required_without:payment_proof_url', // ✅ Obligatorio si no viene payment_proof_url
             ],
             'payment_proof_url' => [
-                'required',
+                'nullable', // ✅ Cambiado de 'required' a 'nullable'
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
+                'required_without:payment_reference', // ✅ Obligatorio si no viene payment_reference
             ],
             'identificacion' => [
                 'required',
@@ -229,10 +231,15 @@ class CreatePurchaseRequest extends FormRequest
             'currency.in' => 'La moneda debe ser USD o VES.',
             'specific_numbers.max' => 'No puedes seleccionar más de 100 números a la vez.',
             'specific_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
-            'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
+
+            // ✅ PAYMENT REFERENCE Y PROOF: Al menos uno obligatorio
+            'payment_reference.max' => 'La referencia de pago no puede superar los 255 caracteres.',
+            'payment_reference.required_without' => 'Debes proporcionar al menos una referencia de pago o un comprobante.',
+
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
+            'payment_proof_url.required_without' => 'Debes proporcionar al menos un comprobante o una referencia de pago.',
 
             // ✅ IDENTIFICACIÓN: OBLIGATORIA
             'identificacion.required' => 'La cédula de identidad es obligatoria.',

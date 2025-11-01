@@ -181,34 +181,33 @@ class CreateSinglePurchaseRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:255',
+                'required_without:payment_proof_url',
             ],
             'payment_proof_url' => [
-                'required',
+                'nullable',
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
+                'required_without:payment_reference',
             ],
-
-            // ✅ IDENTIFICACIÓN: OBLIGATORIA
             'identificacion' => [
                 'required',
                 'string',
                 'max:20',
             ],
 
-            // ✅ EMAIL y WHATSAPP: OPCIONALES pero AL MENOS UNO OBLIGATORIO
             'email' => [
                 'nullable',
                 'email:rfc,dns',
                 'max:255',
-                'required_without:whatsapp', // ✅ Obligatorio si no viene whatsapp
+                'required_without:whatsapp',
             ],
             'whatsapp' => [
                 'nullable',
                 'string',
                 'regex:/^\+?[1-9]\d{1,14}$/',
                 'max:20',
-                'required_without:email', // ✅ Obligatorio si no viene email
+                'required_without:email',
             ],
         ];
     }
@@ -228,10 +227,15 @@ class CreateSinglePurchaseRequest extends FormRequest
             'ticket_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
-            'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
+
+            // ✅ PAYMENT REFERENCE Y PROOF: Al menos uno obligatorio
+            'payment_reference.max' => 'La referencia de pago no puede superar los 255 caracteres.',
+            'payment_reference.required_without' => 'Debes proporcionar al menos una referencia de pago o un comprobante.',
+
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
+            'payment_proof_url.required_without' => 'Debes proporcionar al menos un comprobante o una referencia de pago.',
 
             // ✅ IDENTIFICACIÓN: OBLIGATORIA
             'identificacion.required' => 'La cédula de identidad es obligatoria.',
