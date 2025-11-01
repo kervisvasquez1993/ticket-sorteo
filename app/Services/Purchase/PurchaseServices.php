@@ -616,6 +616,7 @@ class PurchaseServices implements IPurchaseServices
         try {
             DB::beginTransaction();
 
+            // 1. Obtener datos ANTES de rechazar
             $purchases = $this->PurchaseRepository->getPurchasesByTransaction($transactionId);
 
             if ($purchases->isEmpty()) {
@@ -631,46 +632,76 @@ class PurchaseServices implements IPurchaseServices
             $firstPurchase = $purchases->first();
             $event = Event::findOrFail($firstPurchase->event_id);
 
+            // Guardar números antes de rechazar
             $liberatedNumbers = $pendingPurchases
                 ->whereNotNull('ticket_number')
                 ->pluck('ticket_number')
                 ->toArray();
 
+            // 2. Rechazar
             $updatedCount = $this->PurchaseRepository->rejectPurchaseAndFreeNumbers(
                 $transactionId,
                 $reason
             );
 
+            // 3. ✅ COMMIT ANTES de notificaciones
             DB::commit();
 
-            // ✅ ENVIAR NOTIFICACIONES DE RECHAZO
+            // 4. ✅ REFRESCAR datos para notificaciones
+            $firstPurchase->refresh(); // Recargar desde DB
+
+            // 5. ✅ ENVIAR NOTIFICACIONES (fuera de la transacción)
             $emailSent = false;
             $whatsappSent = false;
             $emailStatus = 'not_attempted';
             $whatsappStatus = 'not_attempted';
 
             if (!empty($firstPurchase->email)) {
-                $emailSent = $this->emailNotification->sendRejectionNotification(
-                    $firstPurchase->email,
-                    $transactionId,
-                    $reason,
-                    $event->name
-                );
-                $emailStatus = $emailSent ? 'sent_successfully' : 'failed_to_send';
+                try {
+                    $emailSent = $this->emailNotification->sendRejectionNotification(
+                        $firstPurchase->email,
+                        $transactionId,
+                        $reason,
+                        $event->name
+                    );
+                    $emailStatus = $emailSent ? 'sent_successfully' : 'failed_to_send';
+                } catch (\Exception $e) {
+                    Log::error('Error enviando email de rechazo', [
+                        'transaction_id' => $transactionId,
+                        'email' => $firstPurchase->email,
+                        'error' => $e->getMessage()
+                    ]);
+                    $emailStatus = 'error_sending';
+                }
             } else {
                 $emailStatus = 'no_email_provided';
             }
 
             if (!empty($firstPurchase->whatsapp)) {
-                $whatsappSent = $this->whatsappNotification->sendRejectionNotification(
-                    $firstPurchase->whatsapp,
-                    $transactionId,
-                    $reason
-                );
-                $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
+                try {
+                    $whatsappSent = $this->whatsappNotification->sendRejectionNotification(
+                        $firstPurchase->whatsapp,
+                        $transactionId,
+                        $reason
+                    );
+                    $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
+                } catch (\Exception $e) {
+                    Log::error('Error enviando WhatsApp de rechazo', [
+                        'transaction_id' => $transactionId,
+                        'whatsapp' => $firstPurchase->whatsapp,
+                        'error' => $e->getMessage()
+                    ]);
+                    $whatsappStatus = 'error_sending';
+                }
             } else {
                 $whatsappStatus = 'no_whatsapp_provided';
             }
+
+            Log::info('✅ Notificaciones de rechazo procesadas', [
+                'transaction_id' => $transactionId,
+                'email_status' => $emailStatus,
+                'whatsapp_status' => $whatsappStatus
+            ]);
 
             return [
                 'success' => true,
