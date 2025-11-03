@@ -178,17 +178,15 @@ class CreateSinglePurchaseRequest extends FormRequest
                 },
             ],
             'payment_reference' => [
-                'nullable',
+                'required',  // ✅ AHORA ES OBLIGATORIO
                 'string',
                 'max:255',
-                'required_without:payment_proof_url',
             ],
             'payment_proof_url' => [
-                'nullable',
+                'required',  // ✅ AHORA ES OBLIGATORIO
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
-                'required_without:payment_reference',
             ],
             'identificacion' => [
                 'required',
@@ -228,21 +226,16 @@ class CreateSinglePurchaseRequest extends FormRequest
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
 
-            // ✅ PAYMENT REFERENCE Y PROOF: Al menos uno obligatorio
+            'payment_reference.required' => 'El número de referencia es obligatorio.',
+            'payment_reference.string' => 'La referencia de pago debe ser texto.',
             'payment_reference.max' => 'La referencia de pago no puede superar los 255 caracteres.',
-            'payment_reference.required_without' => 'Debes proporcionar al menos una referencia de pago o un comprobante.',
 
+            'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
-            'payment_proof_url.required_without' => 'Debes proporcionar al menos un comprobante o una referencia de pago.',
-
-            // ✅ IDENTIFICACIÓN: OBLIGATORIA
             'identificacion.required' => 'La cédula de identidad es obligatoria.',
-            'identificacion.regex' => 'La cédula debe tener el formato: V-12345678 o E-12345678',
             'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
-
-            // ✅ EMAIL y WHATSAPP: Al menos uno obligatorio
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
             'email.required_without' => 'Debes proporcionar al menos un email o un WhatsApp.',
