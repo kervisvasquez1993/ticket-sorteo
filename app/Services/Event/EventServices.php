@@ -244,11 +244,6 @@ class EventServices implements IEventServices
         try {
             $event = $this->eventRepository->getEventById($id);
 
-            // Validar que no tenga compras completadas
-            $hasCompletedPurchases = $event->purchases()->where('status', 'completed')->exists();
-            if ($hasCompletedPurchases) {
-                throw new Exception('No se puede eliminar un evento con compras completadas');
-            }
 
             $results = $this->eventRepository->deleteEvent($event);
             return [

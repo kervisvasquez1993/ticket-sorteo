@@ -9,7 +9,7 @@ use App\Http\Requests\Event\SelectWinnerRequest;
 use App\Http\Requests\Event\UpdateEventRequest;
 use App\Interfaces\Event\IEventServices;
 use App\Models\Event;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class EventController extends Controller
 {
@@ -130,10 +130,19 @@ class EventController extends Controller
      */
     public function destroy(string $id)
     {
+        // Verificar si el usuario autenticado es administrador
+        if (!Auth::check() || !Auth::user()->isAdmin()) {
+            return response()->json([
+                'error' => 'No tienes permisos para realizar esta acción'
+            ], 403);
+        }
+
         $result = $this->eventServices->deleteEvent($id);
+
         if (!$result['success']) {
             return response()->json(['error' => $result['message']], 422);
         }
+
         return response()->json($result['data'], 200);
     }
     // public function availableNumbers($id)
