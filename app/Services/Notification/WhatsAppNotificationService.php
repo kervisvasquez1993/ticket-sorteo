@@ -88,19 +88,20 @@ class WhatsAppNotificationService
      */
     private function buildApprovalMessage(array $data): string
     {
-        $ticketsText = count($data['ticket_numbers']) <= 3
-            ? implode(', ', $data['ticket_numbers'])
-            : count($data['ticket_numbers']) . ' tickets';
+        // Formatear los números de tickets con el símbolo #
+        $ticketsFormatted = array_map(fn($ticket) => "#{$ticket}", $data['ticket_numbers']);
+        $ticketsText = implode(', ', $ticketsFormatted);
+
+        // Obtener la URL base desde las variables de entorno
+        $baseUrl = rtrim(env('FRONTEND_URL', config('app.url')), '/');
+        $purchaseUrl = "{$baseUrl}/my-purchase/{$data['transaction_id']}";
 
         return "✅ *¡Tu compra ha sido aprobada!*\n\n" .
-            "🎫 *Tickets:* {$ticketsText}\n" .
+            "🎫 *Tickets:* {$ticketsText}\n\n" .
             "📦 *Cantidad:* {$data['quantity']} ticket(s)\n\n" .
-            "👉 *Ver detalles de tu compra:*\n" .
-            "{$data['purchase_url']}\n\n" .
-            "_(Haz clic en el enlace para ver todos los detalles)_\n\n" .
-            "¡Gracias por tu compra! 🎉";
+            "¡Gracias por tu compra! 🎉\n" .
+            $baseUrl;
     }
-
     /**
      * Construir mensaje de rechazo
      */
