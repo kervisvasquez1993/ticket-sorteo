@@ -525,7 +525,8 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
-            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
+            DB::raw('MAX(identificacion) as identificacion'),
+                 DB::raw('MAX(fullname) as fullname'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('transaction_id', $transactionId)

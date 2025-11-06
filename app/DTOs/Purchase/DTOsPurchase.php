@@ -21,7 +21,7 @@ class DTOsPurchase
         private readonly int $payment_method_id,
         private readonly int $quantity,
         private readonly string $identificacion,
-        private readonly string $fullname, // ✅ NUEVO CAMPO OBLIGATORIO
+        private readonly string $fullname,
         private readonly ?string $email = null,
         private readonly ?string $whatsapp = null,
         private readonly ?string $currency = null,

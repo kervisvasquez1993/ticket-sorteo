@@ -13,8 +13,6 @@ return new class extends Migration
     {
         Schema::table('purchases', function (Blueprint $table) {
             $table->string('fullname')->nullable()->after('user_id');
-
-            // Agregar índice para búsquedas
             $table->index('fullname');
         });
     }
