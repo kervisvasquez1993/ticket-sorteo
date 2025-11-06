@@ -93,7 +93,6 @@ class CreateSinglePurchaseRequest extends FormRequest
                     $outOfRange = [];
                     $alreadyReserved = [];
 
-                    // Verificar números duplicados en la misma solicitud
                     $duplicates = array_diff_assoc($value, array_unique($value));
                     if (!empty($duplicates)) {
                         $fail('No puedes seleccionar el mismo número dos veces.');
@@ -101,19 +100,16 @@ class CreateSinglePurchaseRequest extends FormRequest
                     }
 
                     foreach ($value as $ticketNumber) {
-                        // Verificar que sea un número entero
                         if (!is_int($ticketNumber)) {
                             $fail('Todos los números de ticket deben ser números enteros.');
                             return;
                         }
 
-                        // Verificar rango
                         if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
                             $outOfRange[] = $ticketNumber;
                             continue;
                         }
 
-                        // Verificar si está reservado
                         $isUsed = \App\Models\Purchase::where('event_id', $eventId)
                             ->where('ticket_number', $ticketNumber)
                             ->exists();
@@ -123,7 +119,6 @@ class CreateSinglePurchaseRequest extends FormRequest
                         }
                     }
 
-                    // Reportar errores consolidados
                     if (!empty($outOfRange)) {
                         $numbers = implode(', ', $outOfRange);
                         $fail("Los siguientes números están fuera del rango del evento ({$event->start_number} - {$event->end_number}): {$numbers}");
@@ -158,12 +153,10 @@ class CreateSinglePurchaseRequest extends FormRequest
                         return;
                     }
 
-                    // Definir qué monedas acepta cada tipo de método de pago
                     $allowedCurrencies = [
                         'pago_movil' => ['VES'],
                         'zelle' => ['USD'],
                         'binance' => ['USD'],
-                        // Agrega más tipos según tu sistema
                     ];
 
                     $methodType = $paymentMethod->type;
@@ -178,12 +171,12 @@ class CreateSinglePurchaseRequest extends FormRequest
                 },
             ],
             'payment_reference' => [
-                'required',  // ✅ AHORA ES OBLIGATORIO
+                'required',
                 'string',
                 'max:255',
             ],
             'payment_proof_url' => [
-                'required',  // ✅ AHORA ES OBLIGATORIO
+                'required',
                 'file',
                 'mimes:jpeg,jpg,png,pdf',
                 'max:5120',
@@ -193,7 +186,13 @@ class CreateSinglePurchaseRequest extends FormRequest
                 'string',
                 'max:20',
             ],
-
+            // ✅ NUEVO CAMPO
+            'fullname' => [
+                'required',
+                'string',
+                'max:255',
+                'min:3',
+            ],
             'email' => [
                 'nullable',
                 'email:rfc,dns',
@@ -225,21 +224,25 @@ class CreateSinglePurchaseRequest extends FormRequest
             'ticket_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
-
             'payment_reference.required' => 'El número de referencia es obligatorio.',
             'payment_reference.string' => 'La referencia de pago debe ser texto.',
             'payment_reference.max' => 'La referencia de pago no puede superar los 255 caracteres.',
-
             'payment_proof_url.required' => 'El comprobante de pago es obligatorio.',
             'payment_proof_url.file' => 'El comprobante debe ser un archivo.',
             'payment_proof_url.mimes' => 'El comprobante debe ser jpg, jpeg, png o pdf.',
             'payment_proof_url.max' => 'El comprobante no debe pesar más de 5MB.',
             'identificacion.required' => 'La cédula de identidad es obligatoria.',
             'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
+
+            // ✅ NUEVOS MENSAJES
+            'fullname.required' => 'El nombre completo es obligatorio.',
+            'fullname.string' => 'El nombre completo debe ser texto.',
+            'fullname.max' => 'El nombre completo no puede superar los 255 caracteres.',
+            'fullname.min' => 'El nombre completo debe tener al menos 3 caracteres.',
+
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
             'email.required_without' => 'Debes proporcionar al menos un email o un WhatsApp.',
-
             'whatsapp.regex' => 'El formato del número de WhatsApp no es válido. Debe incluir el código de país (ejemplo: +584244444161).',
             'whatsapp.max' => 'El número de WhatsApp no puede superar los 20 caracteres.',
             'whatsapp.required_without' => 'Debes proporcionar al menos un WhatsApp o un email.',

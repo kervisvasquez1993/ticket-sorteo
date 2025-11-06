@@ -4,7 +4,7 @@ namespace App\DTOs\Purchase;
 
 use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminRandomPurchaseRequest;
-use App\Http\Requests\Purchase\CreateAdminMassivePurchaseRequest; // ✅ NUEVO
+use App\Http\Requests\Purchase\CreateAdminMassivePurchaseRequest;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
@@ -21,6 +21,7 @@ class DTOsPurchase
         private readonly int $payment_method_id,
         private readonly int $quantity,
         private readonly string $identificacion,
+        private readonly string $fullname, // ✅ NUEVO CAMPO OBLIGATORIO
         private readonly ?string $email = null,
         private readonly ?string $whatsapp = null,
         private readonly ?string $currency = null,
@@ -46,6 +47,7 @@ class DTOsPurchase
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
             identificacion: $validated['identificacion'],
+            fullname: $validated['fullname'], // ✅ NUEVO
             email: $validated['email'] ?? null,
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
@@ -93,6 +95,7 @@ class DTOsPurchase
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
             identificacion: $validated['identificacion'],
+            fullname: $validated['fullname'], // ✅ NUEVO
             email: $validated['email'] ?? null,
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
@@ -119,6 +122,7 @@ class DTOsPurchase
             payment_method_id: $validated['payment_method_id'],
             quantity: $ticketCount,
             identificacion: $validated['identificacion'],
+            fullname: $validated['fullname'], // ✅ NUEVO
             email: $validated['email'] ?? null,
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
@@ -172,6 +176,7 @@ class DTOsPurchase
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
             identificacion: $validated['identificacion'],
+            fullname: $validated['fullname'], // ✅ NUEVO
             email: $validated['email'] ?? null,
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
@@ -183,7 +188,6 @@ class DTOsPurchase
         );
     }
 
-    // ✅ NUEVO MÉTODO PARA COMPRA MASIVA ADMINISTRATIVA
     public static function fromAdminMassivePurchaseRequest(CreateAdminMassivePurchaseRequest $request): self
     {
         $validated = $request->validated();
@@ -195,7 +199,7 @@ class DTOsPurchase
 
         $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
         $quantity = $validated['quantity'];
-        $totalAmount = 0.00; // ✅ Siempre $0 para compras administrativas masivas
+        $totalAmount = 0.00;
 
         return new self(
             event_id: $validated['event_id'],
@@ -203,14 +207,15 @@ class DTOsPurchase
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
             identificacion: $validated['identificacion'],
-            email: null, // ✅ FORZADO A NULL - No se envía email
-            whatsapp: null, // ✅ FORZADO A NULL - No se envía WhatsApp
+            fullname: $validated['fullname'], // ✅ NUEVO
+            email: null,
+            whatsapp: null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::id(),
             specific_numbers: null,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
-            total_amount: $totalAmount, // ✅ Monto ya establecido en $0
+            total_amount: $totalAmount,
         );
     }
 
@@ -233,6 +238,7 @@ class DTOsPurchase
             payment_method_id: $validated['payment_method_id'],
             quantity: $ticketCount,
             identificacion: $validated['identificacion'],
+            fullname: $validated['fullname'], // ✅ NUEVO
             email: $validated['email'] ?? null,
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
@@ -284,7 +290,6 @@ class DTOsPurchase
         return null;
     }
 
-    // ✅ NUEVO MÉTODO PARA SUBIR COMPROBANTE DE COMPRA MASIVA
     private static function uploadPaymentMassiveProofToS3Admin(CreateAdminMassivePurchaseRequest $request): ?string
     {
         if ($request->hasFile('payment_proof_url')) {
@@ -313,6 +318,7 @@ class DTOsPurchase
             'payment_method_id' => $this->payment_method_id,
             'quantity' => $this->quantity,
             'identificacion' => $this->identificacion,
+            'fullname' => $this->fullname, // ✅ NUEVO
             'email' => $this->email,
             'whatsapp' => $this->whatsapp,
             'currency' => $this->currency,
@@ -348,6 +354,12 @@ class DTOsPurchase
     public function getIdentificacion(): string
     {
         return $this->identificacion;
+    }
+
+    // ✅ NUEVO GETTER
+    public function getFullname(): string
+    {
+        return $this->fullname;
     }
 
     public function getEmail(): ?string

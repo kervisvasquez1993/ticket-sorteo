@@ -100,9 +100,10 @@ class PurchaseRepository implements IPurchaseRepository
             'event_price_id' => $data->getEventPriceId(),
             'payment_method_id' => $data->getPaymentMethodId(),
             'user_id' => $data->getUserId(),
+            'fullname' => $data->getFullname(),
             'email' => $data->getEmail(),
             'whatsapp' => $data->getWhatsapp(),
-            'identificacion' => $data->getIdentificacion(), // ✅ AGREGADO
+            'identificacion' => $data->getIdentificacion(),
             'currency' => $data->getCurrency(),
             'ticket_number' => $ticketNumber,
             'amount' => $amount,
@@ -418,7 +419,8 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
-            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
+            DB::raw('MAX(identificacion) as identificacion'),
+            DB::raw('MAX(fullname) as fullname'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->with([
@@ -480,7 +482,8 @@ class PurchaseRepository implements IPurchaseRepository
             'payment_proof_url',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
-            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
+            DB::raw('MAX(identificacion) as identificacion'),
+            DB::raw('MAX(fullname) as fullname'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('user_id', $userId)
@@ -672,9 +675,10 @@ class PurchaseRepository implements IPurchaseRepository
                 'name' => $group->event->name
             ],
             'user' => $userData,
+            'fullname' => $group->fullname ?? null, // ✅ NUEVO
             'email' => $group->email,
             'whatsapp' => $group->whatsapp,
-            'identificacion' => $group->identificacion ?? null, // ✅ AGREGADO
+            'identificacion' => $group->identificacion ?? null,
             'quantity' => $group->quantity,
             'unit_price' => number_format($group->total_amount / $group->quantity, 2),
             'total_amount' => number_format($group->total_amount, 2),

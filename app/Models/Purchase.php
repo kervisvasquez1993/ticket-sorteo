@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Builder;
 class Purchase extends Model
 {
     use HasFactory;
-
     protected $fillable = [
         'user_id',
+        'fullname',
         'event_id',
         'event_price_id',
         'payment_method_id',
@@ -34,7 +34,7 @@ class Purchase extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
-        'is_admin_purchase' => 'boolean', // ✅ NUEVO
+        'is_admin_purchase' => 'boolean',
     ];
 
     // ====================================================================
@@ -72,10 +72,17 @@ class Purchase extends Model
 
     public function getCustomerName(): string
     {
+        // 1. Prioridad: nombre completo guardado
+        if (!empty($this->fullname)) {
+            return $this->fullname;
+        }
+
+        // 2. Usuario autenticado
         if ($this->hasAuthenticatedUser() && $this->user) {
             return $this->user->name;
         }
 
+        // 3. Extraer del email
         if ($this->email) {
             return explode('@', $this->email)[0];
         }
@@ -102,6 +109,7 @@ class Purchase extends Model
     {
         return [
             'name' => $this->getCustomerName(),
+            'fullname' => $this->fullname,
             'email' => $this->getCustomerEmail(),
             'whatsapp' => $this->getCustomerWhatsapp(),
             'identificacion' => $this->getCustomerIdentificacion(),
@@ -277,6 +285,7 @@ class Purchase extends Model
         return [
             'transaction_id' => $transactionId,
             'event_id' => $first->event_id,
+            'fullname' => $first->fullname,
             'email' => $first->email,
             'whatsapp' => $first->whatsapp,
             'identificacion' => $first->identificacion,
@@ -285,7 +294,7 @@ class Purchase extends Model
             'total_amount' => $purchases->sum('amount'),
             'status' => $purchases->pluck('status')->unique()->toArray(),
             'qr_code_url' => $first->qr_code_url,
-            'is_admin_purchase' => $first->is_admin_purchase, // ✅ NUEVO
+            'is_admin_purchase' => $first->is_admin_purchase,
             'created_at' => $first->created_at,
         ];
     }
@@ -356,7 +365,8 @@ class Purchase extends Model
     public static function fullTextSearch(string $searchTerm)
     {
         return self::where(function ($query) use ($searchTerm) {
-            $query->where('email', 'ILIKE', "%{$searchTerm}%")
+            $query->where('fullname', 'ILIKE', "%{$searchTerm}%")
+                ->orWhere('email', 'ILIKE', "%{$searchTerm}%")
                 ->orWhere('whatsapp', 'LIKE', "%{$searchTerm}%")
                 ->orWhere('identificacion', 'LIKE', "%{$searchTerm}%");
         })->get();
