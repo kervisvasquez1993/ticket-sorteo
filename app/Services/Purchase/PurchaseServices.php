@@ -172,7 +172,7 @@ class PurchaseServices implements IPurchaseServices
                     'quantity' => $data->getQuantity(),
                     'total_amount' => $totalAmount,
                 ],
-                'message' => 'Compra registrada exitosamente. Hemos enviado la información de tu compra a tu correo electrónico.'
+                'message' => 'Compra registrada exitosamente, Espera la aprobación del administrador.'
             ];
         } catch (Exception $exception) {
             DB::rollBack();
