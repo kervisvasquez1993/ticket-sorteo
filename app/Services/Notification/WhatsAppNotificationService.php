@@ -111,9 +111,12 @@ class WhatsAppNotificationService
             ? "\n\n*Motivo:* {$data['reason']}"
             : '';
 
+        $supportPhone = env('SUPPORT_PHONE', '+58 424-5750827');
+
         return "❌ *Tu compra ha sido rechazada*\n\n" .
             "Lamentablemente tu transacción no pudo ser procesada.{$reasonText}\n\n" .
-            "Para más información, contacta con soporte.\n" .
+            "Para más información, contacta con soporte:\n" .
+            "📱 {$supportPhone}\n\n" .
             "Disculpa las molestias.";
     }
 
