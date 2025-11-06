@@ -133,6 +133,7 @@ Route::middleware('auth:api')->group(function () {
 
         // PRECIOS DE EVENTOS - ADMIN
         Route::post('/events-prices', [EventPriceController::class, 'store']);
+        Route::delete('/events-prices/{id}', [EventPriceController::class, 'destroy']);
         Route::patch('/events-prices/{id}/set-default', [EventPriceController::class, 'setAsDefault']);
     });
 });
