@@ -106,19 +106,19 @@ class EventPriceServices implements IEventPriceServices
             // Si es el único precio del evento, forzar que sea default
             if ($totalPrices === 1) {
                 $data = new DTOsEventPrice(
-                    event_id: $data->getEventId(),
+                    event_id: $eventId,
                     amount: $data->getAmount() > 0 ? $data->getAmount() : $EventPrice->amount,
                     currency: !empty($data->getCurrency()) ? $data->getCurrency() : $EventPrice->currency,
                     is_default: true, // Forzar a true
-                    is_active: $data->isActive()
+                    is_active: $data->isActive() ?? $EventPrice->is_active // 👈 Preservar si no viene
                 );
             } else {
-                // Si hay múltiples precios y se está marcando como default
-                if ($data->isDefault()) {
+                // Si hay múltiples precios y se está enviando explícitamente is_default
+                if ($data->isDefault() === true) {
                     // Quitar el default de otros precios del mismo evento
                     $this->EventPriceRepository->removeDefaultFromEvent($eventId, $id);
                 }
-                // Si NO viene marcado como default, no hacer nada adicional
+                // Si is_default viene como null, no se tocará en el update
             }
 
             $results = $this->EventPriceRepository->updateEventPrice($data, $EventPrice);
