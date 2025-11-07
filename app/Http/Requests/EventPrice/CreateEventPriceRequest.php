@@ -27,8 +27,8 @@ class CreateEventPriceRequest extends FormRequest
             'amount' => [
                 'required',
                 'numeric',
-                'min:0.01',
-                'regex:/^\d+(\.\d{1,2})?$/' // Máximo 2 decimales
+                'min:0.0001',
+                'regex:/^\d+(\.\d{1,4})?$/' // Máximo 4 decimales
             ],
             'currency' => [
                 'required',
@@ -59,7 +59,7 @@ class CreateEventPriceRequest extends FormRequest
             'event_id.exists' => 'El evento especificado no existe',
             'amount.required' => 'El monto es obligatorio',
             'amount.min' => 'El monto debe ser mayor a 0',
-            'amount.regex' => 'El monto debe tener máximo 2 decimales',
+            'amount.regex' => 'El monto debe tener máximo 4 decimales',
             'currency.required' => 'La moneda es obligatoria',
             'currency.size' => 'La moneda debe tener 3 caracteres (ej: USD, EUR)',
             'currency.regex' => 'La moneda debe estar en mayúsculas',
