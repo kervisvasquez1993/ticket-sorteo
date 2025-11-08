@@ -96,7 +96,7 @@ class WhatsAppNotificationService
 
         // Obtener la URL base desde las variables de entorno
         $baseUrl = rtrim(env('FRONTEND_URL', config('app.url')), '/');
-        $purchaseUrl = "{$baseUrl}/my-purchase/{$data['transaction_id']}";
+        $purchaseUrl = "{$baseUrl}";
 
         // ✅ Construir el saludo personalizado
         $greeting = !empty($data['fullname'])
