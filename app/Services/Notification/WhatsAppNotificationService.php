@@ -39,7 +39,8 @@ class WhatsAppNotificationService
         string $whatsapp,
         string $transactionId,
         array $ticketNumbers,
-        int $quantity
+        int $quantity,
+        string $fullname = '' // ✅ NUEVO PARÁMETRO
     ): bool {
         if (empty($whatsapp)) {
             Log::info('No se envió notificación: WhatsApp no proporcionado', [
@@ -54,7 +55,8 @@ class WhatsAppNotificationService
             'transaction_id' => $transactionId,
             'quantity' => $quantity,
             'purchase_url' => $purchaseUrl,
-            'ticket_numbers' => $ticketNumbers
+            'ticket_numbers' => $ticketNumbers,
+            'fullname' => $fullname // ✅ PASAR EL NOMBRE
         ]);
 
         return $this->sendNotification($whatsapp, $message, $transactionId, 'approval');
@@ -96,11 +98,17 @@ class WhatsAppNotificationService
         $baseUrl = rtrim(env('FRONTEND_URL', config('app.url')), '/');
         $purchaseUrl = "{$baseUrl}/my-purchase/{$data['transaction_id']}";
 
-        return "✅ *¡Tu compra ha sido aprobada!*\n\n" .
+        // ✅ Construir el saludo personalizado
+        $greeting = !empty($data['fullname'])
+            ? "¡Hola *{$data['fullname']}*! 👋\n\n"
+            : "¡Hola! 👋\n\n";
+
+        return $greeting .
+            "✅ *¡Tu compra ha sido aprobada!*\n\n" .
             "🎫 *Tickets:* {$ticketsText}\n\n" .
             "📦 *Cantidad:* {$data['quantity']} ticket(s)\n\n" .
-            "¡Gracias por tu compra! 🎉\n" .
-            $baseUrl;
+            "🔗 *Ver mi compra:* {$purchaseUrl}\n\n" .
+            "¡Gracias por tu compra! 🎉";
     }
     /**
      * Construir mensaje de rechazo

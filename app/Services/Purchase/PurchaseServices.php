@@ -396,7 +396,7 @@ class PurchaseServices implements IPurchaseServices
                 foreach ($purchasesWithNumbers as $purchase) {
                     $this->PurchaseRepository->assignTicketNumber(
                         $purchase->id,
-                        $purchase->ticket_number, // ✅ Mantener el número original
+                        $purchase->ticket_number,
                         'completed'
                     );
                     $assignedNumbers[] = $purchase->ticket_number;
@@ -467,13 +467,14 @@ class PurchaseServices implements IPurchaseServices
                 $emailStatus = 'no_email_provided';
             }
 
-            // Intentar enviar WhatsApp si está disponible
+            // ✅ Intentar enviar WhatsApp si está disponible (AHORA CON NOMBRE)
             if (!empty($firstPurchase->whatsapp)) {
                 $whatsappSent = $this->whatsappNotification->sendApprovalNotification(
                     $firstPurchase->whatsapp,
                     $transactionId,
                     $assignedNumbers,
-                    $purchases->count()
+                    $purchases->count(),
+                    $firstPurchase->fullname // ✅ AGREGAR EL NOMBRE
                 );
                 $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
             } else {
@@ -488,7 +489,7 @@ class PurchaseServices implements IPurchaseServices
                     'purchases_count' => $purchases->count(),
                     'assigned_numbers' => $assignedNumbers,
                     'status' => 'completed',
-                    'had_specific_numbers' => $purchasesWithNumbers->isNotEmpty(), // ✅ Indicador
+                    'had_specific_numbers' => $purchasesWithNumbers->isNotEmpty(),
                     'notifications' => [
                         'email' => [
                             'sent' => $emailSent,
