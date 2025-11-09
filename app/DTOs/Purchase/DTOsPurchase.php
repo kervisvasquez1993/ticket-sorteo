@@ -201,13 +201,17 @@ class DTOsPurchase
         $quantity = $validated['quantity'];
         $totalAmount = 0.00;
 
+        // ✅ Obtener nombre del admin que está creando la compra
+        $adminUser = Auth::user();
+        $adminFullname = $adminUser ? $adminUser->name : 'Administrador';
+
         return new self(
             event_id: $validated['event_id'],
             event_price_id: $validated['event_price_id'],
             payment_method_id: $validated['payment_method_id'],
             quantity: $quantity,
             identificacion: $validated['identificacion'],
-            fullname: $validated['fullname'], // ✅ NUEVO
+            fullname: $validated['fullname'] ?? "ADMIN: {$adminFullname}",
             email: null,
             whatsapp: null,
             currency: $validated['currency'] ?? $eventPrice->currency,
@@ -218,7 +222,6 @@ class DTOsPurchase
             total_amount: $totalAmount,
         );
     }
-
     public static function fromAdminPurchaseRequest(CreateAdminPurchaseRequest $request): self
     {
         $validated = $request->validated();
