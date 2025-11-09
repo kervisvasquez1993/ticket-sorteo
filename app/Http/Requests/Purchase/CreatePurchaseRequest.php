@@ -178,6 +178,21 @@ class CreatePurchaseRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
+                function ($attribute, $value, $fail) {
+                    $identificacion = $this->input('identificacion');
+
+                    if (!$identificacion) {
+                        return;
+                    }
+
+                    $existingPurchase = \App\Models\Purchase::where('identificacion', $identificacion)
+                        ->where('payment_reference', $value)
+                        ->exists();
+
+                    if ($existingPurchase) {
+                        $fail('Ya has utilizado esta referencia de pago anteriormente.');
+                    }
+                },
             ],
             'payment_proof_url' => [
                 'required',
