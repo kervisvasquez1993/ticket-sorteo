@@ -990,7 +990,7 @@ class PurchaseServices implements IPurchaseServices
     public function getPurchasesByIdentificacion(string $identificacion)
     {
         try {
-            // Normalizar la identificación antes de buscar
+
             $identificacion = $this->normalizeIdentificacion($identificacion);
 
             $results = $this->PurchaseRepository->getPurchasesByIdentificacion($identificacion);

@@ -349,6 +349,9 @@ class PurchaseRepository implements IPurchaseRepository
     // ✅ NUEVO: Búsqueda por identificación
     public function getPurchasesByIdentificacion(string $identificacion)
     {
+        // Extraer solo los números de la identificación recibida
+        $numeros = preg_replace('/[^0-9]/', '', $identificacion);
+
         $results = Purchase::select(
             'transaction_id',
             DB::raw('MIN(id) as first_purchase_id'),
@@ -364,10 +367,15 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
-            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
+            DB::raw('MAX(identificacion) as identificacion'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
-            ->where('identificacion', $identificacion)
+            ->where(function ($query) use ($numeros) {
+                // Buscar donde la identificación termine con los números
+                // Esto encuentra: "123", "V-123", "v-123", "E-123", etc.
+                $query->where('identificacion', 'LIKE', '%' . $numeros)
+                    ->orWhere('identificacion', $numeros);
+            })
             ->with([
                 'event:id,name',
                 'paymentMethod:id,name',
@@ -526,7 +534,7 @@ class PurchaseRepository implements IPurchaseRepository
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
             DB::raw('MAX(identificacion) as identificacion'),
-                 DB::raw('MAX(fullname) as fullname'),
+            DB::raw('MAX(fullname) as fullname'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('transaction_id', $transactionId)
