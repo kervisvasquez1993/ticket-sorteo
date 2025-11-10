@@ -73,7 +73,7 @@ class CreateAdminPurchaseRequest extends FormRequest
                 'required',
                 'array',
                 'min:1',
-                'max:50',
+                'max:200',
                 function ($attribute, $value, $fail) {
                     if (!is_array($value)) {
                         return;

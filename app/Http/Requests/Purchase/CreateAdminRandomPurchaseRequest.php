@@ -64,7 +64,7 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'min:1',
-                'max:100',
+                'max:200',
             ],
             'currency' => [
                 'required',
