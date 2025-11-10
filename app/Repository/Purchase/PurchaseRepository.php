@@ -302,17 +302,20 @@ class PurchaseRepository implements IPurchaseRepository
             ->get();
     }
 
-    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT y en el formateo
     public function getPurchasesByWhatsApp(string $whatsapp)
     {
         $results = Purchase::select(
             'transaction_id',
             DB::raw('MIN(id) as first_purchase_id'),
             DB::raw('MIN(created_at) as created_at'),
-            DB::raw('COUNT(*) as quantity'),
-            DB::raw('SUM(amount) as total_amount'),
+            DB::raw('COUNT(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN 1 END) as quantity'),
+            DB::raw('SUM(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN amount ELSE 0 END) as total_amount'),
             'currency',
-            'status',
+            DB::raw("CASE
+            WHEN COUNT(CASE WHEN status = 'completed' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'completed'
+            WHEN COUNT(CASE WHEN status = 'pending' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'pending'
+            ELSE 'failed'
+        END as status"),
             'event_id',
             'payment_method_id',
             'payment_reference',
@@ -320,7 +323,8 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
-            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
+            DB::raw('MAX(identificacion) as identificacion'),
+            DB::raw('MAX(fullname) as fullname'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('whatsapp', $whatsapp)
@@ -332,7 +336,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->groupBy(
                 'transaction_id',
                 'currency',
-                'status',
                 'event_id',
                 'payment_method_id',
                 'payment_reference',
@@ -346,21 +349,22 @@ class PurchaseRepository implements IPurchaseRepository
             return $this->formatGroupedPurchase($group);
         });
     }
-
-    // ✅ NUEVO: Búsqueda por identificación
     public function getPurchasesByIdentificacion(string $identificacion)
     {
-        // Extraer solo los números de la identificación recibida
         $numeros = preg_replace('/[^0-9]/', '', $identificacion);
 
         $results = Purchase::select(
             'transaction_id',
             DB::raw('MIN(id) as first_purchase_id'),
             DB::raw('MIN(created_at) as created_at'),
-            DB::raw('COUNT(*) as quantity'),
-            DB::raw('SUM(amount) as total_amount'),
+            DB::raw('COUNT(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN 1 END) as quantity'),
+            DB::raw('SUM(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN amount ELSE 0 END) as total_amount'),
             'currency',
-            'status',
+            DB::raw("CASE
+            WHEN COUNT(CASE WHEN status = 'completed' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'completed'
+            WHEN COUNT(CASE WHEN status = 'pending' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'pending'
+            ELSE 'failed'
+        END as status"),
             'event_id',
             'payment_method_id',
             'payment_reference',
@@ -369,11 +373,10 @@ class PurchaseRepository implements IPurchaseRepository
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
             DB::raw('MAX(identificacion) as identificacion'),
+            DB::raw('MAX(fullname) as fullname'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where(function ($query) use ($numeros) {
-                // Buscar donde la identificación termine con los números
-                // Esto encuentra: "123", "V-123", "v-123", "E-123", etc.
                 $query->where('identificacion', 'LIKE', '%' . $numeros)
                     ->orWhere('identificacion', $numeros);
             })
@@ -385,7 +388,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->groupBy(
                 'transaction_id',
                 'currency',
-                'status',
                 'event_id',
                 'payment_method_id',
                 'payment_reference',
@@ -399,12 +401,9 @@ class PurchaseRepository implements IPurchaseRepository
             return $this->formatGroupedPurchase($group);
         });
     }
-
     // ====================================================================
     // MÉTODOS DE AGRUPACIÓN
     // ====================================================================
-
-    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
     public function getGroupedPurchases(?DTOsPurchaseFilter $filters = null)
     {
         $query = Purchase::query();
@@ -417,10 +416,14 @@ class PurchaseRepository implements IPurchaseRepository
             'transaction_id',
             DB::raw('MIN(id) as first_purchase_id'),
             DB::raw('MIN(created_at) as created_at'),
-            DB::raw('COUNT(*) as quantity'),
-            DB::raw('SUM(amount) as total_amount'),
+            DB::raw('COUNT(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN 1 END) as quantity'),
+            DB::raw('SUM(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN amount ELSE 0 END) as total_amount'),
             'currency',
-            'status',
+            DB::raw("CASE
+            WHEN COUNT(CASE WHEN status = 'completed' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'completed'
+            WHEN COUNT(CASE WHEN status = 'pending' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'pending'
+            ELSE 'failed'
+        END as status"),
             'event_id',
             'payment_method_id',
             'payment_reference',
@@ -440,7 +443,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->groupBy(
                 'transaction_id',
                 'currency',
-                'status',
                 'event_id',
                 'payment_method_id',
                 'payment_reference',
@@ -474,17 +476,63 @@ class PurchaseRepository implements IPurchaseRepository
         ];
     }
 
+
     // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
+    // public function getGroupedUserPurchases($userId)
+    // {
+    //     return Purchase::select(
+    //         'transaction_id',
+    //         DB::raw('MIN(id) as first_purchase_id'),
+    //         DB::raw('MIN(created_at) as created_at'),
+    //         DB::raw('COUNT(*) as quantity'),
+    //         DB::raw('SUM(amount) as total_amount'),
+    //         'currency',
+    //         'status',
+    //         'event_id',
+    //         'payment_method_id',
+    //         'payment_reference',
+    //         'payment_proof_url',
+    //         DB::raw('MAX(email) as email'),
+    //         DB::raw('MAX(whatsapp) as whatsapp'),
+    //         DB::raw('MAX(identificacion) as identificacion'),
+    //         DB::raw('MAX(fullname) as fullname'),
+    //         DB::raw('MAX(qr_code_url) as qr_code_url')
+    //     )
+    //         ->where('user_id', $userId)
+    //         ->with([
+    //             'event:id,name',
+    //             'paymentMethod:id,name'
+    //         ])
+    //         ->groupBy(
+    //             'transaction_id',
+    //             'currency',
+    //             'status',
+    //             'event_id',
+    //             'payment_method_id',
+    //             'payment_reference',
+    //             'payment_proof_url'
+    //         )
+    //         ->orderBy('created_at', 'desc')
+    //         ->get()
+    //         ->map(function ($group) {
+    //             return $this->formatGroupedPurchase($group);
+    //         });
+    // }
+
     public function getGroupedUserPurchases($userId)
     {
         return Purchase::select(
             'transaction_id',
             DB::raw('MIN(id) as first_purchase_id'),
             DB::raw('MIN(created_at) as created_at'),
-            DB::raw('COUNT(*) as quantity'),
-            DB::raw('SUM(amount) as total_amount'),
+            DB::raw('COUNT(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN 1 END) as quantity'),
+            DB::raw('SUM(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN amount ELSE 0 END) as total_amount'),
             'currency',
-            'status',
+            DB::raw("CASE
+            WHEN COUNT(CASE WHEN status = 'completed' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'completed'
+            WHEN COUNT(CASE WHEN status = 'pending' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'pending'
+            ELSE 'failed'
+        END as status"),
             'event_id',
             'payment_method_id',
             'payment_reference',
@@ -503,7 +551,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->groupBy(
                 'transaction_id',
                 'currency',
-                'status',
                 'event_id',
                 'payment_method_id',
                 'payment_reference',
@@ -516,17 +563,24 @@ class PurchaseRepository implements IPurchaseRepository
             });
     }
 
-    // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
+
     public function getPurchaseByTransaction(string $transactionId)
     {
         $group = Purchase::select(
             'transaction_id',
             DB::raw('MIN(id) as first_purchase_id'),
             DB::raw('MIN(created_at) as created_at'),
-            DB::raw('COUNT(*) as quantity'),
-            DB::raw('SUM(amount) as total_amount'),
+            // ✅ Contar solo tickets válidos (no rechazados Y no failed)
+            DB::raw('COUNT(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN 1 END) as quantity'),
+            // ✅ Sumar solo amounts de tickets válidos (no rechazados Y no failed)
+            DB::raw('SUM(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN amount ELSE 0 END) as total_amount'),
             'currency',
-            'status',
+            // ✅ Status basado en tickets válidos
+            DB::raw("CASE
+            WHEN COUNT(CASE WHEN status = 'completed' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'completed'
+            WHEN COUNT(CASE WHEN status = 'pending' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'pending'
+            ELSE 'failed'
+        END as status"),
             'event_id',
             'payment_method_id',
             'payment_reference',
@@ -547,7 +601,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->groupBy(
                 'transaction_id',
                 'currency',
-                'status',
                 'event_id',
                 'payment_method_id',
                 'payment_reference',
@@ -562,7 +615,6 @@ class PurchaseRepository implements IPurchaseRepository
 
         return $this->formatGroupedPurchase($group);
     }
-
     // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
     public function getGroupedPurchasesByEvent(string $eventId)
     {
@@ -570,10 +622,14 @@ class PurchaseRepository implements IPurchaseRepository
             'transaction_id',
             DB::raw('MIN(id) as first_purchase_id'),
             DB::raw('MIN(created_at) as created_at'),
-            DB::raw('COUNT(*) as quantity'),
-            DB::raw('SUM(amount) as total_amount'),
+            DB::raw('COUNT(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN 1 END) as quantity'),
+            DB::raw('SUM(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN amount ELSE 0 END) as total_amount'),
             'currency',
-            'status',
+            DB::raw("CASE
+            WHEN COUNT(CASE WHEN status = 'completed' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'completed'
+            WHEN COUNT(CASE WHEN status = 'pending' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 'pending'
+            ELSE 'failed'
+        END as status"),
             'event_id',
             'payment_method_id',
             'payment_reference',
@@ -581,7 +637,7 @@ class PurchaseRepository implements IPurchaseRepository
             'user_id',
             DB::raw('MAX(email) as email'),
             DB::raw('MAX(whatsapp) as whatsapp'),
-            DB::raw('MAX(identificacion) as identificacion'), // ✅ AGREGADO
+            DB::raw('MAX(identificacion) as identificacion'),
             DB::raw('MAX(qr_code_url) as qr_code_url')
         )
             ->where('event_id', $eventId)
@@ -593,7 +649,6 @@ class PurchaseRepository implements IPurchaseRepository
             ->groupBy(
                 'transaction_id',
                 'currency',
-                'status',
                 'event_id',
                 'payment_method_id',
                 'payment_reference',
@@ -606,6 +661,7 @@ class PurchaseRepository implements IPurchaseRepository
                 return $this->formatGroupedPurchase($group);
             });
     }
+
 
     // ====================================================================
     // MÉTODOS LEGACY (Para compatibilidad - DEPRECADOS)
@@ -657,15 +713,18 @@ class PurchaseRepository implements IPurchaseRepository
     // MÉTODOS PRIVADOS HELPER
     // ====================================================================
 
-    // ✅ ACTUALIZADO: Incluir identificacion en el response
     private function formatGroupedPurchase($group): array
     {
         $purchaseIds = Purchase::where('transaction_id', $group->transaction_id)
             ->pluck('id')
             ->toArray();
 
+        // ✅ Solo tickets válidos (no rechazados Y no failed)
         $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
             ->whereNotNull('ticket_number')
+            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
+            ->where('status', '!=', 'failed') // ✅ AGREGADO: Excluir failed
+            ->orderBy('ticket_number', 'asc') // ✅ Ordenar los números
             ->pluck('ticket_number')
             ->toArray();
 
@@ -678,6 +737,8 @@ class PurchaseRepository implements IPurchaseRepository
             ];
         }
 
+        $validQuantity = max(1, $group->quantity);
+
         return [
             'transaction_id' => $group->transaction_id,
             'event' => [
@@ -685,12 +746,12 @@ class PurchaseRepository implements IPurchaseRepository
                 'name' => $group->event->name
             ],
             'user' => $userData,
-            'fullname' => $group->fullname ?? null, // ✅ NUEVO
+            'fullname' => $group->fullname ?? null,
             'email' => $group->email,
             'whatsapp' => $group->whatsapp,
             'identificacion' => $group->identificacion ?? null,
             'quantity' => $group->quantity,
-            'unit_price' => number_format($group->total_amount / $group->quantity, 2),
+            'unit_price' => number_format($group->total_amount / $validQuantity, 2),
             'total_amount' => number_format($group->total_amount, 2),
             'currency' => $group->currency,
             'payment_method' => $group->paymentMethod->name ?? 'N/A',
@@ -705,7 +766,6 @@ class PurchaseRepository implements IPurchaseRepository
             'created_at' => $group->created_at->toDateTimeString()
         ];
     }
-
     // ✅ ACTUALIZADO: Incluir identificacion en los filtros de búsqueda
     private function applyFilters($query, DTOsPurchaseFilter $filters)
     {
