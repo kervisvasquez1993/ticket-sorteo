@@ -188,19 +188,26 @@ class CreateAdminPurchaseRequest extends FormRequest
                 'max:20',
             ],
 
+            // ✅ FULLNAME: OBLIGATORIO
+            'fullname' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+
             // ✅ EMAIL y WHATSAPP: OPCIONALES pero AL MENOS UNO OBLIGATORIO
             'email' => [
                 'nullable',
                 'email:rfc,dns',
                 'max:255',
-                'required_without:whatsapp', // ✅ Obligatorio si no viene whatsapp
+                'required_without:whatsapp',
             ],
             'whatsapp' => [
                 'nullable',
                 'string',
                 'regex:/^\+?[1-9]\d{1,14}$/',
                 'max:20',
-                'required_without:email', // ✅ Obligatorio si no viene email
+                'required_without:email',
             ],
 
             'auto_approve' => [
@@ -226,12 +233,16 @@ class CreateAdminPurchaseRequest extends FormRequest
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
 
-            // ✅ IDENTIFICACIÓN: OBLIGATORIA
+            // ✅ IDENTIFICACIÓN
             'identificacion.required' => 'La cédula de identidad es obligatoria.',
-            'identificacion.regex' => 'La cédula debe tener el formato: V-12345678 o E-12345678',
             'identificacion.max' => 'La cédula no puede superar los 20 caracteres.',
 
-            // ✅ EMAIL y WHATSAPP: Al menos uno obligatorio
+            // ✅ FULLNAME
+            'fullname.required' => 'El nombre completo es obligatorio.',
+            'fullname.string' => 'El nombre completo debe ser texto válido.',
+            'fullname.max' => 'El nombre completo no puede superar los 255 caracteres.',
+
+            // ✅ EMAIL y WHATSAPP
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.max' => 'El correo electrónico no puede superar los 255 caracteres.',
             'email.required_without' => 'Debes proporcionar al menos un email o un WhatsApp.',
