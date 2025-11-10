@@ -1090,7 +1090,7 @@ class PurchaseRepository implements IPurchaseRepository
                     ->where('ticket_number', $ticketNumber)
                     ->update([
                         'ticket_number' => $rejectionTicketNumber,
-                        'status' => 'removed',
+                        'status' => 'failed',
                         'payment_reference' => 'TICKET REMOVIDO DE LA TRANSACCIÓN',
                         'updated_at' => now()
                     ]);
