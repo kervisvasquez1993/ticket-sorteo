@@ -157,7 +157,7 @@ class CreateAdminRandomPurchaseRequest extends FormRequest
             'payment_method_id.required' => 'El método de pago es obligatorio.',
             'quantity.required' => 'La cantidad es obligatoria.',
             'quantity.min' => 'Debe comprar al menos 1 ticket.',
-            'quantity.max' => 'Solo puede comprar hasta 100 tickets por vez.',
+            'quantity.max' => 'Solo puede comprar hasta 200 tickets por vez.',
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
 

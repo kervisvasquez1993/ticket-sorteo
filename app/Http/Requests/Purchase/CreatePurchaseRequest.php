@@ -73,7 +73,7 @@ class CreatePurchaseRequest extends FormRequest
                 'required',
                 'integer',
                 'min:1',
-                'max:100',
+                'max:200',
             ],
             'currency' => [
                 'required',
@@ -237,7 +237,7 @@ class CreatePurchaseRequest extends FormRequest
             'payment_method_id.required' => 'El método de pago es obligatorio.',
             'quantity.required' => 'La cantidad es obligatoria.',
             'quantity.min' => 'Debe comprar al menos 1 ticket.',
-            'quantity.max' => 'Solo puede comprar hasta 100 tickets por vez.',
+            'quantity.max' => 'Solo puede comprar hasta 200 tickets por vez.',
             'currency.required' => 'La moneda es obligatoria.',
             'currency.in' => 'La moneda debe ser USD o VES.',
             'specific_numbers.max' => 'No puedes seleccionar más de 100 números a la vez.',
