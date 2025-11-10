@@ -2,6 +2,7 @@
 
 namespace App\Repository\Purchase;
 
+use App\DTOs\Purchase\DTOsAddTickets;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Interfaces\Purchase\IPurchaseRepository;
@@ -871,5 +872,263 @@ class PurchaseRepository implements IPurchaseRepository
 
             throw $e;
         }
+    }
+
+    public function addTicketsToTransaction(DTOsAddTickets $dto): array
+    {
+        DB::beginTransaction();
+
+        try {
+            // 1. Obtener compra de referencia
+            $referencePurchase = Purchase::where('transaction_id', $dto->getTransactionId())
+                ->first();
+
+            if (!$referencePurchase) {
+                throw new \Exception("Transacción no encontrada: {$dto->getTransactionId()}");
+            }
+
+            $event = \App\Models\Event::findOrFail($referencePurchase->event_id);
+
+            // 2. Determinar qué números agregar según el modo
+            if ($dto->isSpecificMode()) {
+                $ticketsToAdd = $this->prepareSpecificTickets($dto, $event, $referencePurchase->event_id);
+            } else {
+                $ticketsToAdd = $this->prepareRandomTickets($dto, $event);
+            }
+
+            // 3. Preparar registros para inserción
+            $purchaseRecords = $this->preparePurchaseRecords(
+                $ticketsToAdd,
+                $referencePurchase,
+                $dto->getTransactionId()
+            );
+
+            // 4. Insertar
+            Purchase::insert($purchaseRecords);
+
+            DB::commit();
+
+            Log::info('✅ Tickets agregados a transacción', [
+                'transaction_id' => $dto->getTransactionId(),
+                'mode' => $dto->getMode(),
+                'tickets_added' => $ticketsToAdd,
+                'count' => count($ticketsToAdd)
+            ]);
+
+            return [
+                'mode' => $dto->getMode(),
+                'tickets_added' => $ticketsToAdd,
+                'count' => count($ticketsToAdd)
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('❌ Error agregando tickets a transacción', [
+                'transaction_id' => $dto->getTransactionId(),
+                'dto_data' => $dto->toArray(),
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * ✅ Preparar números específicos con validaciones
+     */
+    private function prepareSpecificTickets(DTOsAddTickets $dto, $event, int $eventId): array
+    {
+        $ticketsToAdd = $dto->getTicketNumbers();
+
+        // Validar que están en rango
+        foreach ($ticketsToAdd as $ticketNumber) {
+            if ($ticketNumber < $event->start_number || $ticketNumber > $event->end_number) {
+                throw new \Exception(
+                    "El número {$ticketNumber} está fuera del rango válido " .
+                        "({$event->start_number} - {$event->end_number})"
+                );
+            }
+        }
+
+        // Validar que están disponibles
+        $reservedNumbers = $this->getReservedTicketNumbers($eventId, $ticketsToAdd);
+
+        if (!empty($reservedNumbers)) {
+            throw new \Exception(
+                'Los siguientes números ya están reservados: ' . implode(', ', $reservedNumbers)
+            );
+        }
+
+        return $ticketsToAdd;
+    }
+
+    /**
+     * ✅ Preparar números aleatorios
+     */
+    private function prepareRandomTickets(DTOsAddTickets $dto, $event): array
+    {
+        $quantity = $dto->getQuantity();
+
+        // Obtener números disponibles
+        $usedNumbers = $this->getUsedTicketNumbers($event->id);
+        $allNumbers = range($event->start_number, $event->end_number);
+        $availableNumbers = array_diff($allNumbers, $usedNumbers);
+
+        if (count($availableNumbers) < $quantity) {
+            throw new \Exception(
+                "No hay suficientes números disponibles. " .
+                    "Disponibles: " . count($availableNumbers) . ", Solicitados: {$quantity}"
+            );
+        }
+
+        // Seleccionar números aleatorios
+        $availableNumbersArray = array_values($availableNumbers);
+        $ticketsToAdd = [];
+
+        for ($i = 0; $i < $quantity; $i++) {
+            $randomIndex = array_rand($availableNumbersArray);
+            $ticketsToAdd[] = $availableNumbersArray[$randomIndex];
+            unset($availableNumbersArray[$randomIndex]);
+            $availableNumbersArray = array_values($availableNumbersArray);
+        }
+
+        sort($ticketsToAdd); // Ordenar para mejor legibilidad
+
+        return $ticketsToAdd;
+    }
+
+    /**
+     * ✅ Preparar registros de compra clonando datos de referencia
+     */
+    private function preparePurchaseRecords(
+        array $ticketsToAdd,
+        $referencePurchase,
+        string $transactionId
+    ): array {
+        $purchaseRecords = [];
+        $now = now();
+
+        foreach ($ticketsToAdd as $ticketNumber) {
+            $purchaseRecords[] = [
+                // ✅ Clonar TODOS los datos de la compra de referencia
+                'event_id' => $referencePurchase->event_id,
+                'event_price_id' => $referencePurchase->event_price_id,
+                'payment_method_id' => $referencePurchase->payment_method_id,
+                'user_id' => $referencePurchase->user_id,
+                'fullname' => $referencePurchase->fullname,
+                'email' => $referencePurchase->email,
+                'whatsapp' => $referencePurchase->whatsapp,
+                'identificacion' => $referencePurchase->identificacion,
+                'currency' => $referencePurchase->currency,
+                'amount' => $referencePurchase->amount,
+                'total_amount' => $referencePurchase->amount,
+                'quantity' => 1,
+                'transaction_id' => $transactionId,
+                'payment_reference' => $referencePurchase->payment_reference,
+                'payment_proof_url' => $referencePurchase->payment_proof_url,
+                'qr_code_url' => $referencePurchase->qr_code_url,
+                'status' => $referencePurchase->status,
+                'is_admin_purchase' => $referencePurchase->is_admin_purchase,
+
+                // ✅ Solo cambia el número de ticket
+                'ticket_number' => $ticketNumber,
+
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        return $purchaseRecords;
+    }
+
+    /**
+     * ✅ Quitar tickets de una transacción
+     */
+    public function removeTicketsFromTransaction(
+        string $transactionId,
+        array $ticketNumbersToRemove
+    ): int {
+        DB::beginTransaction();
+
+        try {
+            // 1. Obtener tickets actuales
+            $currentTickets = $this->getTransactionTickets($transactionId);
+
+            if (empty($currentTickets)) {
+                throw new \Exception("No se encontraron tickets en esta transacción");
+            }
+
+            // 2. Validar que los números a remover existen
+            $invalidTickets = array_diff($ticketNumbersToRemove, $currentTickets);
+
+            if (!empty($invalidTickets)) {
+                throw new \Exception(
+                    "Los siguientes números no pertenecen a esta transacción: "
+                        . implode(', ', $invalidTickets)
+                );
+            }
+
+            // 3. Validar que no se eliminan TODOS los tickets
+            $remainingTickets = array_diff($currentTickets, $ticketNumbersToRemove);
+
+            if (empty($remainingTickets)) {
+                throw new \Exception(
+                    "No puedes eliminar todos los tickets de una transacción. " .
+                        "Si deseas cancelar la compra completa, usa el método de rechazo."
+                );
+            }
+
+            // 4. Marcar como rechazados
+            $timestamp = now()->format('YmdHis');
+            $affected = 0;
+
+            foreach ($ticketNumbersToRemove as $index => $ticketNumber) {
+                $rejectionTicketNumber = "RECHAZADO-{$ticketNumber}-{$timestamp}-" .
+                    str_pad($index + 1, 3, '0', STR_PAD_LEFT) .
+                    "-REMOVED";
+
+                $updated = DB::table('purchases')
+                    ->where('transaction_id', $transactionId)
+                    ->where('ticket_number', $ticketNumber)
+                    ->update([
+                        'ticket_number' => $rejectionTicketNumber,
+                        'status' => 'removed',
+                        'payment_reference' => 'TICKET REMOVIDO DE LA TRANSACCIÓN',
+                        'updated_at' => now()
+                    ]);
+
+                $affected += $updated;
+            }
+
+            DB::commit();
+
+            Log::info('✅ Tickets removidos de transacción', [
+                'transaction_id' => $transactionId,
+                'removed_tickets' => $ticketNumbersToRemove,
+                'count' => $affected,
+                'remaining_tickets' => $remainingTickets
+            ]);
+
+            return $affected;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('❌ Error removiendo tickets de transacción', [
+                'transaction_id' => $transactionId,
+                'tickets_to_remove' => $ticketNumbersToRemove ?? [],
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * ✅ Obtener tickets actuales de una transacción (sin rechazados)
+     */
+    public function getTransactionTickets(string $transactionId): array
+    {
+        return Purchase::where('transaction_id', $transactionId)
+            ->whereNotNull('ticket_number')
+            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
+            ->orderBy('ticket_number', 'asc')
+            ->pluck('ticket_number')
+            ->toArray();
     }
 }

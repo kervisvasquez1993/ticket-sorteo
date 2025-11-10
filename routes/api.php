@@ -45,10 +45,14 @@ Route::post('purchases', [PurchaseController::class, 'store']);
 Route::post('purchases/single', [PurchaseController::class, 'storeSingle']);
 Route::post('purchases/check-ticket-availability', [PurchaseController::class, 'checkTicketAvailability']);
 Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
+
 Route::get('purchases-whatsapp/{whatsapp}', [PurchaseController::class, 'getByWhatsApp'])
     ->name('purchases.by.whatsapp');
 Route::get('purchases-identificacion/{identificacion}', [PurchaseController::class, 'getByIdentificacion'])
     ->name('purchases.by.identificacion');
+// ✅ Nuevas rutas
+Route::post('transaction/{transactionId}/add-tickets', [PurchaseController::class, 'addTickets']);
+Route::post('transaction/{transactionId}/remove-tickets', [PurchaseController::class, 'removeTickets']);
 
 // ============================================
 // RUTAS PROTEGIDAS - MIDDLEWARE: AUTH

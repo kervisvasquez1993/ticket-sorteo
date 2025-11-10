@@ -2,6 +2,7 @@
 
 namespace App\Interfaces\Purchase;
 
+use App\DTOs\Purchase\DTOsAddTickets;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Models\Purchase;
@@ -258,4 +259,10 @@ interface IPurchaseRepository
     public function getPurchasesByIdentificacion(string $identificacion);
     public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
     public function rejectPurchaseAndFreeNumbers(string $transactionId, ?string $reason = null): int;
+    public function addTicketsToTransaction(DTOsAddTickets $dto): array;
+    public function removeTicketsFromTransaction(
+        string $transactionId,
+        array $ticketNumbersToRemove
+    ): int;
+    public function getTransactionTickets(string $transactionId): array;
 }

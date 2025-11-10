@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Purchase;
 
+use App\DTOs\Purchase\DTOsAddTickets;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Purchase\AddTicketsToTransactionRequest;
 use App\Http\Requests\Purchase\CheckTicketAvailabilityRequest;
 use App\Http\Requests\Purchase\CreateAdminMassivePurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
@@ -354,5 +356,43 @@ class PurchaseController extends Controller
             'message' => $result['message'],
             'data' => $result['data']
         ], 200);
+    }
+    public function addTickets(AddTicketsToTransactionRequest $request, string $transactionId)
+    {
+        $dto = DTOsAddTickets::fromRequest($request, $transactionId);
+
+        $result = $this->PurchaseServices->addTicketsToTransaction($dto);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json($result, 200);
+    }
+
+    /**
+     * ✅ Quitar tickets de una transacción
+     */
+    public function removeTickets(Request $request, string $transactionId)
+    {
+        $validated = $request->validate([
+            'ticket_numbers' => 'required|array|min:1',
+            'ticket_numbers.*' => 'required|string',
+        ]);
+
+        $result = $this->PurchaseServices->removeTicketsFromTransaction(
+            $transactionId,
+            $validated['ticket_numbers']
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json($result, 200);
     }
 }

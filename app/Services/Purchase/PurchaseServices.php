@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchase;
 
+use App\DTOs\Purchase\DTOsAddTickets;
 use Exception;
 use App\Models\Event;
 use App\Models\Purchase;
@@ -1384,6 +1385,125 @@ class PurchaseServices implements IPurchaseServices
             return [
                 'success' => false,
                 'message' => 'Error al consultar el estado: ' . $exception->getMessage()
+            ];
+        }
+    }
+
+    public function addTicketsToTransaction(DTOsAddTickets $dto): array
+    {
+        try {
+            DB::beginTransaction();
+
+            // 1. Verificar transacción
+            $transaction = $this->PurchaseRepository->getPurchaseByTransaction(
+                $dto->getTransactionId()
+            );
+
+            if (!$transaction) {
+                throw new \Exception("Transacción no encontrada: {$dto->getTransactionId()}");
+            }
+
+            // 2. Verificar evento activo
+            $event = Event::findOrFail($transaction['event']['id']);
+
+            if ($event->status !== 'active') {
+                throw new \Exception("No se pueden agregar tickets a un evento inactivo");
+            }
+
+            // 3. Agregar tickets usando repository
+            $result = $this->PurchaseRepository->addTicketsToTransaction($dto);
+
+            DB::commit();
+
+            // 4. Obtener transacción actualizada
+            $updatedTransaction = $this->PurchaseRepository->getPurchaseByTransaction(
+                $dto->getTransactionId()
+            );
+
+            $modeText = $dto->getMode() === 'random' ? 'aleatorios' : 'específicos';
+
+            return [
+                'success' => true,
+                'message' => "Se agregaron {$result['count']} ticket(s) {$modeText} exitosamente",
+                'data' => [
+                    'transaction_id' => $dto->getTransactionId(),
+                    'mode' => $result['mode'],
+                    'added_tickets' => $result['tickets_added'],
+                    'added_count' => $result['count'],
+                    'previous_quantity' => $transaction['quantity'],
+                    'new_quantity' => $updatedTransaction['quantity'],
+                    'previous_amount' => $transaction['total_amount'],
+                    'new_amount' => $updatedTransaction['total_amount'],
+                    'all_tickets' => $updatedTransaction['ticket_numbers']
+                ]
+            ];
+        } catch (\Exception $exception) {
+            DB::rollBack();
+            Log::error('❌ Error agregando tickets', [
+                'dto' => $dto->toArray(),
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * ✅ Quitar tickets de una transacción
+     */
+    public function removeTicketsFromTransaction(
+        string $transactionId,
+        array $ticketNumbersToRemove
+    ): array {
+        try {
+            DB::beginTransaction();
+
+            // 1. Verificar transacción
+            $transaction = $this->PurchaseRepository->getPurchaseByTransaction($transactionId);
+
+            if (!$transaction) {
+                throw new \Exception("Transacción no encontrada: {$transactionId}");
+            }
+
+            // 2. Remover tickets
+            $removedCount = $this->PurchaseRepository->removeTicketsFromTransaction(
+                $transactionId,
+                $ticketNumbersToRemove
+            );
+
+            DB::commit();
+
+            // 3. Obtener transacción actualizada
+            $updatedTransaction = $this->PurchaseRepository->getPurchaseByTransaction($transactionId);
+
+            return [
+                'success' => true,
+                'message' => "Se removieron {$removedCount} ticket(s) exitosamente",
+                'data' => [
+                    'transaction_id' => $transactionId,
+                    'removed_tickets' => $ticketNumbersToRemove,
+                    'removed_count' => $removedCount,
+                    'previous_quantity' => $transaction['quantity'],
+                    'new_quantity' => $updatedTransaction['quantity'],
+                    'previous_amount' => $transaction['total_amount'],
+                    'new_amount' => $updatedTransaction['total_amount'],
+                    'remaining_tickets' => $updatedTransaction['ticket_numbers']
+                ]
+            ];
+        } catch (\Exception $exception) {
+            DB::rollBack();
+            Log::error('❌ Error removiendo tickets', [
+                'transaction_id' => $transactionId,
+                'tickets_to_remove' => $ticketNumbersToRemove,
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
             ];
         }
     }

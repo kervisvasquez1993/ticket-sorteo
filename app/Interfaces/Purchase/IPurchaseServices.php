@@ -2,6 +2,7 @@
 
 namespace App\Interfaces\Purchase;
 
+use App\DTOs\Purchase\DTOsAddTickets;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 
@@ -26,4 +27,9 @@ interface IPurchaseServices
     public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
     public function getMassivePurchaseStatus(string $transactionId): array;
     public function createMassivePurchaseAsync(DTOsPurchase $data, bool $autoApprove = true): array;
+    public function addTicketsToTransaction(DTOsAddTickets $dto): array;
+    public function removeTicketsFromTransaction(
+        string $transactionId,
+        array $ticketNumbersToRemove
+    ): array;
 }
