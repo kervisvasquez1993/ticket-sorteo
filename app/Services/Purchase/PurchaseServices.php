@@ -13,6 +13,7 @@ use App\DTOs\Purchase\DTOsPurchase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
+use App\DTOs\Purchase\DTOsUpdatePurchaseQuantity;
 use App\Jobs\SendPurchaseNotificationJob;
 use App\Interfaces\Purchase\IPurchaseServices;
 use Illuminate\Validation\ValidationException;
@@ -1498,6 +1499,79 @@ class PurchaseServices implements IPurchaseServices
             Log::error('❌ Error removiendo tickets', [
                 'transaction_id' => $transactionId,
                 'tickets_to_remove' => $ticketNumbersToRemove,
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    public function updatePendingPurchaseQuantity(DTOsUpdatePurchaseQuantity $dto): array
+    {
+        try {
+            $transaction = $this->PurchaseRepository->getPurchaseByTransaction(
+                $dto->getTransactionId()
+            );
+
+            if (!$transaction) {
+                return [
+                    'success' => false,
+                    'message' => "Transacción no encontrada: {$dto->getTransactionId()}"
+                ];
+            }
+            if ($transaction['status'] !== 'pending') {
+                return [
+                    'success' => false,
+                    'message' => 'Solo se puede editar la cantidad de compras en estado pendiente'
+                ];
+            }
+
+            if ($transaction['ticket_numbers'] !== 'Pendiente de asignación') {
+                return [
+                    'success' => false,
+                    'message' => 'Esta compra ya tiene números asignados. No se puede editar la cantidad.'
+                ];
+            }
+
+            if ($dto->getNewQuantity() > $transaction['quantity']) {
+                $event = Event::findOrFail($transaction['event']['id']);
+                $availableCount = $this->getAvailableNumbersCount($event);
+                $neededTickets = $dto->getNewQuantity() - $transaction['quantity'];
+
+                if ($availableCount < $neededTickets) {
+                    return [
+                        'success' => false,
+                        'message' => "No hay suficientes tickets disponibles. Necesitas {$neededTickets}, disponibles: {$availableCount}"
+                    ];
+                }
+            }
+            $result = $this->PurchaseRepository->adjustPendingPurchaseQuantity(
+                $dto->getTransactionId(),
+                $dto->getNewQuantity()
+            );
+            $updatedTransaction = $this->PurchaseRepository->getPurchaseByTransaction(
+                $dto->getTransactionId()
+            );
+            return [
+                'success' => true,
+                'message' => $result['message'],
+                'data' => [
+                    'transaction_id' => $dto->getTransactionId(),
+                    'action' => $result['action'],
+                    'previous_quantity' => $result['previous_quantity'] ?? null,
+                    'new_quantity' => $result['new_quantity'],
+                    'difference' => $result['added_count'] ?? $result['removed_count'] ?? 0,
+                    'previous_amount' => $transaction['total_amount'],
+                    'new_amount' => $updatedTransaction['total_amount'],
+                    'transaction' => $updatedTransaction
+                ]
+            ];
+        } catch (\Exception $exception) {
+            Log::error('❌ Error actualizando cantidad de compra pendiente', [
+                'dto' => $dto->toArray(),
                 'error' => $exception->getMessage()
             ]);
 

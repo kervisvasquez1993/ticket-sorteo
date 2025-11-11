@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Purchase;
 use App\DTOs\Purchase\DTOsAddTickets;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
+use App\DTOs\Purchase\DTOsUpdatePurchaseQuantity;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\AddTicketsToTransactionRequest;
 use App\Http\Requests\Purchase\CheckTicketAvailabilityRequest;
@@ -15,6 +16,7 @@ use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\GetPurchasesByIdentificacionRequest;
 use App\Http\Requests\Purchase\GetPurchasesByWhatsAppRequest;
+use App\Http\Requests\Purchase\UpdatePurchaseQuantityRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
 use App\Interfaces\Purchase\IPurchaseServices;
 use Illuminate\Http\Request;
@@ -618,5 +620,22 @@ class PurchaseController extends Controller
         }
 
         return response()->json($result, 200);
+    }
+    public function updatePendingQuantity(UpdatePurchaseQuantityRequest $request)
+    {
+        $dto = DTOsUpdatePurchaseQuantity::fromArray($request->validated());
+
+        $result = $this->PurchaseServices->updatePendingPurchaseQuantity($dto);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'data' => $result['data']
+        ], 200);
     }
 }

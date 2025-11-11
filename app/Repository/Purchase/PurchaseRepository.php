@@ -1269,4 +1269,136 @@ class PurchaseRepository implements IPurchaseRepository
             ->pluck('ticket_number')
             ->toArray();
     }
+
+    public function adjustPendingPurchaseQuantity(string $transactionId, int $newQuantity): array
+    {
+        DB::beginTransaction();
+
+        try {
+            // 1. Obtener compras pendientes sin números asignados
+            $pendingPurchases = Purchase::where('transaction_id', $transactionId)
+                ->where('status', 'pending')
+                ->whereNull('ticket_number')
+                ->lockForUpdate()
+                ->get();
+
+            if ($pendingPurchases->isEmpty()) {
+                throw new \Exception(
+                    'No se encontraron compras pendientes sin números asignados para esta transacción'
+                );
+            }
+
+            $currentQuantity = $pendingPurchases->count();
+            $referencePurchase = $pendingPurchases->first();
+
+            // 2. Determinar qué hacer según la diferencia
+            $difference = $newQuantity - $currentQuantity;
+
+            if ($difference === 0) {
+                DB::rollBack();
+                return [
+                    'action' => 'none',
+                    'current_quantity' => $currentQuantity,
+                    'new_quantity' => $newQuantity,
+                    'message' => 'La cantidad ya es la misma, no se realizaron cambios'
+                ];
+            }
+
+            // 3. Si hay que AGREGAR tickets
+            if ($difference > 0) {
+                $purchaseRecords = [];
+                $now = now();
+
+                for ($i = 0; $i < $difference; $i++) {
+                    $purchaseRecords[] = [
+                        'event_id' => $referencePurchase->event_id,
+                        'event_price_id' => $referencePurchase->event_price_id,
+                        'payment_method_id' => $referencePurchase->payment_method_id,
+                        'user_id' => $referencePurchase->user_id,
+                        'fullname' => $referencePurchase->fullname,
+                        'email' => $referencePurchase->email,
+                        'whatsapp' => $referencePurchase->whatsapp,
+                        'identificacion' => $referencePurchase->identificacion,
+                        'currency' => $referencePurchase->currency,
+                        'amount' => $referencePurchase->amount,
+                        'total_amount' => $referencePurchase->amount,
+                        'quantity' => 1,
+                        'transaction_id' => $transactionId,
+                        'payment_reference' => $referencePurchase->payment_reference,
+                        'payment_proof_url' => $referencePurchase->payment_proof_url,
+                        'qr_code_url' => $referencePurchase->qr_code_url,
+                        'status' => 'pending',
+                        'ticket_number' => null,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+
+                Purchase::insert($purchaseRecords);
+
+                DB::commit();
+
+                Log::info('✅ Tickets agregados a compra pendiente', [
+                    'transaction_id' => $transactionId,
+                    'added_count' => $difference,
+                    'previous_quantity' => $currentQuantity,
+                    'new_quantity' => $newQuantity
+                ]);
+
+                return [
+                    'action' => 'added',
+                    'previous_quantity' => $currentQuantity,
+                    'new_quantity' => $newQuantity,
+                    'added_count' => $difference,
+                    'message' => "Se agregaron {$difference} ticket(s) a la compra"
+                ];
+            }
+
+            // 4. Si hay que REMOVER tickets
+            if ($difference < 0) {
+                $toRemoveCount = abs($difference);
+
+                // Obtener los IDs de los últimos registros a eliminar
+                $idsToRemove = $pendingPurchases
+                    ->sortByDesc('id')
+                    ->take($toRemoveCount)
+                    ->pluck('id')
+                    ->toArray();
+
+                Purchase::whereIn('id', $idsToRemove)->delete();
+
+                DB::commit();
+
+                Log::info('✅ Tickets removidos de compra pendiente', [
+                    'transaction_id' => $transactionId,
+                    'removed_count' => $toRemoveCount,
+                    'previous_quantity' => $currentQuantity,
+                    'new_quantity' => $newQuantity,
+                    'removed_ids' => $idsToRemove
+                ]);
+
+                return [
+                    'action' => 'removed',
+                    'previous_quantity' => $currentQuantity,
+                    'new_quantity' => $newQuantity,
+                    'removed_count' => $toRemoveCount,
+                    'message' => "Se removieron {$toRemoveCount} ticket(s) de la compra"
+                ];
+            }
+
+            DB::rollBack();
+            return [
+                'action' => 'error',
+                'message' => 'No se pudo determinar la acción a realizar'
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('❌ Error ajustando cantidad de compra pendiente', [
+                'transaction_id' => $transactionId,
+                'new_quantity' => $newQuantity,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
 }

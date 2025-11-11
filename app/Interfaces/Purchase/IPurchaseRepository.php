@@ -201,6 +201,14 @@ interface IPurchaseRepository
      */
     public function getPurchasesByWhatsApp(string $whatsapp);
 
+    /**
+     * Obtener compras por identificación
+     *
+     * @param string $identificacion
+     * @return \Illuminate\Support\Collection
+     */
+    public function getPurchasesByIdentificacion(string $identificacion);
+
     // ====================================================================
     // MÉTODOS DE AGRUPACIÓN
     // ====================================================================
@@ -238,6 +246,65 @@ interface IPurchaseRepository
     public function getGroupedPurchasesByEvent(string $eventId);
 
     // ====================================================================
+    // MÉTODOS DE GESTIÓN DE TICKETS
+    // ====================================================================
+
+    /**
+     * Verificar disponibilidad de un ticket
+     *
+     * @param int $eventId
+     * @param string $ticketNumber
+     * @return array
+     */
+    public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
+
+    /**
+     * Rechazar compra y liberar números
+     *
+     * @param string $transactionId
+     * @param string|null $reason
+     * @return int Cantidad de compras rechazadas
+     */
+    public function rejectPurchaseAndFreeNumbers(string $transactionId, ?string $reason = null): int;
+
+    /**
+     * Agregar tickets a una transacción existente
+     *
+     * @param DTOsAddTickets $dto
+     * @return array
+     */
+    public function addTicketsToTransaction(DTOsAddTickets $dto): array;
+
+    /**
+     * Remover tickets de una transacción
+     *
+     * @param string $transactionId
+     * @param array $ticketNumbersToRemove
+     * @return int Cantidad de tickets removidos
+     */
+    public function removeTicketsFromTransaction(
+        string $transactionId,
+        array $ticketNumbersToRemove
+    ): int;
+
+    /**
+     * Obtener tickets de una transacción (sin rechazados)
+     *
+     * @param string $transactionId
+     * @return array
+     */
+    public function getTransactionTickets(string $transactionId): array;
+
+    /**
+     * ✅ NUEVO: Ajustar cantidad de compras pendientes sin números asignados
+     *
+     * @param string $transactionId
+     * @param int $newQuantity
+     * @return array [action, previous_quantity, new_quantity, added_count|removed_count, message]
+     */
+    public function adjustPendingPurchaseQuantity(string $transactionId, int $newQuantity): array;
+
+    // ====================================================================
     // MÉTODOS LEGACY (Para compatibilidad - DEPRECADOS)
     // ====================================================================
 
@@ -255,14 +322,4 @@ interface IPurchaseRepository
      * @deprecated Usar bulkInsertPurchases() en su lugar
      */
     public function createAdminRandomPurchase(DTOsPurchase $data, $amount, $transactionId): Purchase;
-
-    public function getPurchasesByIdentificacion(string $identificacion);
-    public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
-    public function rejectPurchaseAndFreeNumbers(string $transactionId, ?string $reason = null): int;
-    public function addTicketsToTransaction(DTOsAddTickets $dto): array;
-    public function removeTicketsFromTransaction(
-        string $transactionId,
-        array $ticketNumbersToRemove
-    ): int;
-    public function getTransactionTickets(string $transactionId): array;
 }

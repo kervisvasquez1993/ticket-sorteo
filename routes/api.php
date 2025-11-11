@@ -42,6 +42,7 @@ Route::get('payment-methods/active', [PaymentMethodController::class, 'active'])
 // RUTAS PÚBLICAS - COMPRAS (PURCHASES)
 // ============================================
 Route::post('purchases', [PurchaseController::class, 'store']);
+Route::patch('purchases/update-pending-quantity', [PurchaseController::class, 'updatePendingQuantity']);
 Route::post('purchases/single', [PurchaseController::class, 'storeSingle']);
 Route::post('purchases/check-ticket-availability', [PurchaseController::class, 'checkTicketAvailability']);
 Route::get('transaction/{transactionId}', [PurchaseController::class, 'showByTransaction']);
