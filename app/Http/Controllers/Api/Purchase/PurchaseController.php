@@ -31,6 +31,230 @@ class PurchaseController extends Controller
 
     /**
      * Display a listing of the resource.
+     *
+     * Obtiene un listado paginado de compras agrupadas por transaction_id con filtros avanzados.
+     *
+     * FILTROS DISPONIBLES:
+     *
+     * 1. FILTROS BÁSICOS:
+     * - user_id (int): Filtrar por ID de usuario autenticado
+     *   Ejemplo: ?user_id=5
+     *
+     * - event_id (int): Filtrar por ID de evento específico
+     *   Ejemplo: ?event_id=1
+     *
+     * - status (string): Filtrar por estado de compra [pending, processing, completed, failed]
+     *   Ejemplo: ?status=completed
+     *
+     * - currency (string): Filtrar por moneda [BS, USD]
+     *   Ejemplo: ?currency=USD
+     *
+     * - payment_method_id (int): Filtrar por método de pago
+     *   Ejemplo: ?payment_method_id=3
+     *
+     * 2. FILTROS DE BÚSQUEDA:
+     * - transaction_id (string): Buscar por transaction_id parcial
+     *   Ejemplo: ?transaction_id=TXN-20250110
+     *
+     * - ticket_number (string): Buscar por número de ticket específico
+     *   Ejemplo: ?ticket_number=00123
+     *
+     * - fullname (string): Buscar por nombre completo del comprador (búsqueda exacta con LIKE)
+     *   Ejemplo: ?fullname=Juan Perez
+     *
+     * - identificacion (string): Filtrar por cédula de identidad
+     *   Ejemplo: ?identificacion=V-12345678
+     *
+     * - search (string): Búsqueda global (busca en: transaction_id, payment_reference, email,
+     *   whatsapp, identificacion, ticket_number, fullname, nombre de usuario, nombre de evento)
+     *   Ejemplo: ?search=rodriguez
+     *
+     * 3. FILTROS DE FECHA:
+     * - date_from (date): Fecha inicial (formato: YYYY-MM-DD)
+     *   Ejemplo: ?date_from=2025-01-01
+     *
+     * - date_to (date): Fecha final (formato: YYYY-MM-DD)
+     *   Ejemplo: ?date_to=2025-01-31
+     *
+     * 4. FILTROS DE CANTIDAD:
+     * - min_quantity (int): Filtrar compradores con mínimo X tickets en una transacción
+     *   Ejemplo: ?min_quantity=50 (trae solo transacciones con 50+ tickets)
+     *
+     * 5. ORDENAMIENTO:
+     * - sort_by (string): Campo por el cual ordenar
+     *   Opciones: [quantity, total_customer_purchased, total_amount, status, created_at]
+     *   Default: quantity
+     *
+     *   • quantity: Ordena por cantidad de tickets en la transacción actual
+     *   • total_customer_purchased: Ordena por total histórico del cliente en el evento
+     *   • total_amount: Ordena por monto total de la transacción
+     *   • status: Ordena por estado (completed, pending, failed)
+     *   • created_at: Ordena por fecha de creación
+     *
+     * - sort_order (string): Orden de clasificación [asc, desc]
+     *   Default: desc
+     *
+     * 6. PAGINACIÓN:
+     * - page (int): Número de página (default: 1)
+     *   Ejemplo: ?page=2
+     *
+     * - per_page (int): Cantidad de resultados por página (default: 15)
+     *   Ejemplo: ?per_page=50
+     *
+     * ============================================================================
+     * EJEMPLOS DE USO PRÁCTICO:
+     * ============================================================================
+     *
+     * 1. LISTAR TODAS LAS COMPRAS (ordenadas por cantidad de mayor a menor):
+     *    GET /api/purchases
+     *
+     * 2. VER COMPRADORES VIP (mínimo 100 tickets históricos):
+     *    GET /api/purchases?sort_by=total_customer_purchased&sort_order=desc&min_quantity=100
+     *
+     * 3. TOP 20 COMPRADORES DE UN EVENTO ESPECÍFICO:
+     *    GET /api/purchases?event_id=1&sort_by=total_customer_purchased&sort_order=desc&per_page=20
+     *
+     * 4. BUSCAR TODAS LAS COMPRAS DE UN CLIENTE POR CÉDULA:
+     *    GET /api/purchases?identificacion=V-12345678&sort_by=created_at&sort_order=desc
+     *
+     * 5. BUSCAR POR NOMBRE COMPLETO:
+     *    GET /api/purchases?fullname=Juan Perez
+     *
+     * 6. COMPRAS COMPLETADAS DE UN EVENTO EN UN RANGO DE FECHAS:
+     *    GET /api/purchases?event_id=1&status=completed&date_from=2025-01-01&date_to=2025-01-31
+     *
+     * 7. BUSCAR POR NÚMERO DE TICKET ESPECÍFICO:
+     *    GET /api/purchases?ticket_number=00123
+     *
+     * 8. BUSCAR POR TRANSACTION_ID:
+     *    GET /api/purchases?transaction_id=TXN-20250110-ABC123
+     *
+     * 9. COMPRAS PENDIENTES DE UN EVENTO:
+     *    GET /api/purchases?event_id=1&status=pending&sort_by=created_at&sort_order=desc
+     *
+     * 10. BUSCAR POR EMAIL O WHATSAPP (búsqueda global):
+     *     GET /api/purchases?search=juan@example.com
+     *     GET /api/purchases?search=+58424123456
+     *
+     * 11. COMPRADORES GRANDES (mínimo 50 tickets por transacción):
+     *     GET /api/purchases?min_quantity=50&sort_by=quantity&sort_order=desc
+     *
+     * 12. ANÁLISIS DE CLIENTES VIP DE UN EVENTO (compras históricas totales):
+     *     GET /api/purchases?event_id=1&sort_by=total_customer_purchased&sort_order=desc&per_page=50
+     *
+     * 13. COMPRAS EN DÓLARES COMPLETADAS:
+     *     GET /api/purchases?currency=USD&status=completed
+     *
+     * 14. COMPRAS POR MÉTODO DE PAGO ESPECÍFICO:
+     *     GET /api/purchases?payment_method_id=2&sort_by=total_amount&sort_order=desc
+     *
+     * 15. BÚSQUEDA GLOBAL POR APELLIDO:
+     *     GET /api/purchases?search=Rodriguez
+     *
+     * 16. LISTAR COMPRADORES PEQUEÑOS (1-10 tickets):
+     *     GET /api/purchases?sort_by=quantity&sort_order=asc&per_page=100
+     *
+     * 17. ANÁLISIS MENSUAL DE UN EVENTO:
+     *     GET /api/purchases?event_id=1&date_from=2025-01-01&date_to=2025-01-31&sort_by=created_at&sort_order=desc
+     *
+     * 18. HISTORIAL COMPLETO DE COMPRAS DE UN CLIENTE:
+     *     GET /api/purchases?identificacion=V-12345678&sort_by=created_at&sort_order=desc&per_page=100
+     *
+     * 19. COMPRAS FALLIDAS PARA ANÁLISIS:
+     *     GET /api/purchases?status=failed&sort_by=created_at&sort_order=desc
+     *
+     * 20. COMBINAR MÚLTIPLES FILTROS (Evento + Moneda + Rango de fechas + Status):
+     *     GET /api/purchases?event_id=1&currency=USD&status=completed&date_from=2025-01-01&date_to=2025-01-31&sort_by=total_amount&sort_order=desc
+     *
+     * ============================================================================
+     * CASOS DE USO AVANZADOS:
+     * ============================================================================
+     *
+     * 21. DASHBOARD ADMINISTRATIVO - Top 10 compradores del mes:
+     *     GET /api/purchases?date_from=2025-01-01&date_to=2025-01-31&sort_by=total_customer_purchased&sort_order=desc&per_page=10
+     *
+     * 22. ANÁLISIS DE VENTAS - Compras mayores a $1000:
+     *     GET /api/purchases?sort_by=total_amount&sort_order=desc&min_quantity=20
+     *
+     * 23. SEGUIMIENTO DE CLIENTE VIP:
+     *     GET /api/purchases?identificacion=V-12345678&event_id=1&sort_by=created_at&sort_order=asc
+     *
+     * 24. VERIFICAR TICKET ESPECÍFICO Y VER COMPRADOR:
+     *     GET /api/purchases?ticket_number=00123&event_id=1
+     *
+     * 25. REPORTES CONTABLES - Todas las compras completadas del mes en USD:
+     *     GET /api/purchases?currency=USD&status=completed&date_from=2025-01-01&date_to=2025-01-31&per_page=100
+     *
+     * 26. DETECTAR PATRONES - Clientes que compraron más de 100 tickets en múltiples transacciones:
+     *     GET /api/purchases?sort_by=total_customer_purchased&sort_order=desc&min_quantity=100
+     *
+     * 27. AUDITORÍA - Ver todas las transacciones con un payment_reference específico:
+     *     GET /api/purchases?search=REF-001
+     *
+     * 28. MARKETING - Clientes frecuentes de un evento (ordenados por historial):
+     *     GET /api/purchases?event_id=1&sort_by=total_customer_purchased&sort_order=desc&per_page=50
+     *
+     * ============================================================================
+     * RESPUESTA EXITOSA (200):
+     * ============================================================================
+     * {
+     *   "data": [
+     *     {
+     *       "transaction_id": "TXN-20250110-ABC123",
+     *       "event": {
+     *         "id": 1,
+     *         "name": "Rifa Año Nuevo 2025"
+     *       },
+     *       "user": null,
+     *       "fullname": "Juan Pérez López",
+     *       "email": "juan@example.com",
+     *       "whatsapp": "+58424123456",
+     *       "identificacion": "V-12345678",
+     *       "quantity": 100,                    // Cantidad en ESTA transacción
+     *       "total_customer_purchased": 450,    // Total histórico del cliente en el evento
+     *       "unit_price": "50.00",
+     *       "total_amount": "5000.00",
+     *       "currency": "USD",
+     *       "payment_method": "Zelle",
+     *       "payment_reference": "REF-001",
+     *       "payment_proof": "https://...",
+     *       "qr_code_url": "https://...",
+     *       "status": "completed",
+     *       "ticket_numbers": ["00001", "00002", "00003"],
+     *       "purchase_ids": [1, 2, 3],
+     *       "created_at": "2025-01-10 15:30:00"
+     *     }
+     *   ],
+     *   "pagination": {
+     *     "total": 100,
+     *     "per_page": 15,
+     *     "current_page": 1,
+     *     "last_page": 7,
+     *     "from": 1,
+     *     "to": 15
+     *   }
+     * }
+     *
+     * ============================================================================
+     * RESPUESTA DE ERROR (422):
+     * ============================================================================
+     * {
+     *   "error": "Mensaje de error descriptivo"
+     * }
+     *
+     * ============================================================================
+     * NOTAS IMPORTANTES:
+     * ============================================================================
+     * - Los filtros son COMBINABLES para análisis complejos
+     * - quantity: Tickets en la transacción actual
+     * - total_customer_purchased: Suma de TODOS los tickets del cliente en ese evento (historial)
+     * - search: Búsqueda global en múltiples campos
+     * - fullname: Búsqueda específica solo en el campo nombre
+     * - El ordenamiento por defecto es por 'quantity' DESC (mayor a menor)
+     * - La paginación por defecto es 15 resultados por página
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {

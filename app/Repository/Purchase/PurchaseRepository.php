@@ -450,9 +450,19 @@ class PurchaseRepository implements IPurchaseRepository
                 'user_id'
             );
 
+        // ✨ Filtro por cantidad mínima
+        if ($filters && $filters->getMinQuantity()) {
+            $query->havingRaw(
+                'COUNT(CASE WHEN (ticket_number NOT LIKE ? OR ticket_number IS NULL) AND status != ? THEN 1 END) >= ?',
+                ['RECHAZADO%', 'failed', $filters->getMinQuantity()]
+            );
+        }
+
+        // ✨ ORDENAMIENTO
         if ($filters && $filters->isValidSortField() && $filters->isValidSortOrder()) {
             $this->applySorting($query, $filters);
         } else {
+            $query->orderByRaw('COUNT(CASE WHEN (ticket_number NOT LIKE \'RECHAZADO%\' OR ticket_number IS NULL) AND status != \'failed\' THEN 1 END) DESC');
             $query->orderBy('created_at', 'desc');
         }
 
@@ -461,10 +471,22 @@ class PurchaseRepository implements IPurchaseRepository
 
         $paginatedResults = $query->paginate($perPage, ['*'], 'page', $page);
 
+        // ✨ Formatear y calcular total_customer_purchased
+        $data = $paginatedResults->map(function ($group) {
+            return $this->formatGroupedPurchase($group);
+        });
+
+        // ✨ Si se ordenó por total_customer_purchased, reordenar en memoria
+        if ($filters && $filters->getSortBy() === 'total_customer_purchased') {
+            $sortOrder = $filters->getSortOrder();
+            $data = $data->sortBy(function ($item) {
+                return $item['total_customer_purchased'];
+            }, SORT_REGULAR, $sortOrder === 'desc');
+            $data = $data->values(); // Re-indexar
+        }
+
         return [
-            'data' => $paginatedResults->map(function ($group) {
-                return $this->formatGroupedPurchase($group);
-            }),
+            'data' => $data,
             'pagination' => [
                 'total' => $paginatedResults->total(),
                 'per_page' => $paginatedResults->perPage(),
@@ -475,8 +497,6 @@ class PurchaseRepository implements IPurchaseRepository
             ]
         ];
     }
-
-
     // ✅ ACTUALIZADO: Incluir identificacion en el SELECT
     // public function getGroupedUserPurchases($userId)
     // {
@@ -723,8 +743,8 @@ class PurchaseRepository implements IPurchaseRepository
         $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
             ->whereNotNull('ticket_number')
             ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
-            ->where('status', '!=', 'failed') // ✅ AGREGADO: Excluir failed
-            ->orderBy('ticket_number', 'asc') // ✅ Ordenar los números
+            ->where('status', '!=', 'failed')
+            ->orderBy('ticket_number', 'asc')
             ->pluck('ticket_number')
             ->toArray();
 
@@ -739,6 +759,19 @@ class PurchaseRepository implements IPurchaseRepository
 
         $validQuantity = max(1, $group->quantity);
 
+        // ✨ CALCULAR total_customer_purchased aquí (después de la query principal)
+        $totalCustomerPurchased = 0;
+        if (!empty($group->identificacion) && !empty($group->event_id)) {
+            $totalCustomerPurchased = Purchase::where('event_id', $group->event_id)
+                ->where('identificacion', $group->identificacion)
+                ->where(function ($q) {
+                    $q->whereNull('ticket_number')
+                        ->orWhere('ticket_number', 'NOT LIKE', 'RECHAZADO%');
+                })
+                ->where('status', '!=', 'failed')
+                ->count();
+        }
+
         return [
             'transaction_id' => $group->transaction_id,
             'event' => [
@@ -750,7 +783,8 @@ class PurchaseRepository implements IPurchaseRepository
             'email' => $group->email,
             'whatsapp' => $group->whatsapp,
             'identificacion' => $group->identificacion ?? null,
-            'quantity' => $group->quantity,
+            'quantity' => $group->quantity, // Cantidad en ESTA transacción
+            'total_customer_purchased' => $totalCustomerPurchased, // ✨ Calculado post-query
             'unit_price' => number_format($group->total_amount / $validQuantity, 2),
             'total_amount' => number_format($group->total_amount, 2),
             'currency' => $group->currency,
@@ -766,7 +800,6 @@ class PurchaseRepository implements IPurchaseRepository
             'created_at' => $group->created_at->toDateTimeString()
         ];
     }
-    // ✅ ACTUALIZADO: Incluir identificacion en los filtros de búsqueda
     private function applyFilters($query, DTOsPurchaseFilter $filters)
     {
         if ($filters->getUserId()) {
@@ -793,9 +826,14 @@ class PurchaseRepository implements IPurchaseRepository
             $query->where('transaction_id', 'LIKE', '%' . $filters->getTransactionId() . '%');
         }
 
-        // ✨ NUEVO: Filtro por número de ticket
+        // ✨ Filtro por número de ticket
         if ($filters->getTicketNumber()) {
             $query->where('ticket_number', 'LIKE', '%' . $filters->getTicketNumber() . '%');
+        }
+
+        // ✨ NUEVO: Filtro por nombre completo
+        if ($filters->getFullname()) {
+            $query->where('fullname', 'ILIKE', '%' . $filters->getFullname() . '%');
         }
 
         if ($filters->getDateFrom()) {
@@ -813,8 +851,9 @@ class PurchaseRepository implements IPurchaseRepository
                     ->orWhere('payment_reference', 'LIKE', '%' . $search . '%')
                     ->orWhere('email', 'LIKE', '%' . $search . '%')
                     ->orWhere('whatsapp', 'LIKE', '%' . $search . '%')
-                    ->orWhere('identificacion', 'LIKE', '%' . $search . '%') // ✅ AGREGADO
+                    ->orWhere('identificacion', 'LIKE', '%' . $search . '%')
                     ->orWhere('ticket_number', 'LIKE', '%' . $search . '%')
+                    ->orWhere('fullname', 'ILIKE', '%' . $search . '%') // ✨ AGREGADO
                     ->orWhereHas('user', function ($userQuery) use ($search) {
                         $userQuery->where('name', 'LIKE', '%' . $search . '%')
                             ->orWhere('email', 'LIKE', '%' . $search . '%');
@@ -831,10 +870,49 @@ class PurchaseRepository implements IPurchaseRepository
         $sortBy = $filters->getSortBy();
         $sortOrder = $filters->getSortOrder();
 
-        $allowedSorts = ['created_at', 'total_amount', 'quantity', 'status'];
+        switch ($sortBy) {
+            case 'quantity':
+                // ✨ Ordenar por cantidad de tickets en ESTA transacción
+                $query->orderByRaw(
+                    "COUNT(CASE WHEN (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) AND status != 'failed' THEN 1 END) {$sortOrder}"
+                );
+                // ✅ Agregar created_at como segundo criterio
+                $query->orderBy('created_at', 'desc');
+                break;
 
-        if (in_array($sortBy, $allowedSorts)) {
-            $query->orderBy($sortBy, $sortOrder);
+            case 'total_customer_purchased':
+                // ✨ Para ordenar por total_customer_purchased necesitamos un enfoque diferente
+                // Como se calcula post-query, ordenamos por quantity como proxy
+                // y luego reordenaremos en memoria si es necesario
+                $query->orderByRaw(
+                    "COUNT(CASE WHEN (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) AND status != 'failed' THEN 1 END) {$sortOrder}"
+                );
+                $query->orderBy('created_at', 'desc');
+                break;
+
+            case 'total_amount':
+                // Ordenar por monto total
+                $query->orderByRaw(
+                    "SUM(CASE WHEN (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) AND status != 'failed' THEN amount ELSE 0 END) {$sortOrder}"
+                );
+                $query->orderBy('created_at', 'desc');
+                break;
+
+            case 'status':
+                $query->orderByRaw(
+                    "CASE
+                    WHEN COUNT(CASE WHEN status = 'completed' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 1
+                    WHEN COUNT(CASE WHEN status = 'pending' AND (ticket_number NOT LIKE 'RECHAZADO%' OR ticket_number IS NULL) THEN 1 END) > 0 THEN 2
+                    ELSE 3
+                END {$sortOrder}"
+                );
+                $query->orderBy('created_at', 'desc');
+                break;
+
+            case 'created_at':
+            default:
+                $query->orderBy('created_at', $sortOrder);
+                break;
         }
     }
     public function checkTicketAvailability(int $eventId, string $ticketNumber): array
