@@ -273,6 +273,38 @@ class PurchaseController extends Controller
         return response()->json($result['data'], 200);
     }
 
+    /**
+     * ✨ ACTUALIZADO: Obtener top de compradores por evento con filtro de moneda
+     */
+    public function getTopBuyers(Request $request, string $eventId)
+    {
+        // Validar parámetros opcionales
+        $limit = (int) $request->get('limit', 10); // Default: top 10
+        $minTickets = (int) $request->get('min_tickets', 1); // Mínimo de tickets
+        $currency = $request->get('currency'); // ✨ Filtro por moneda (opcional)
+
+        // ✅ Validar que la moneda sea válida si se proporciona
+        if ($currency && !in_array(strtoupper($currency), ['VES', 'USD'])) {
+            return response()->json([
+                'error' => 'Moneda inválida. Valores permitidos: VES, USD'
+            ], 422);
+        }
+
+        $result = $this->PurchaseServices->getTopBuyersByEvent(
+            $eventId,
+            $limit,
+            $minTickets,
+            $currency ? strtoupper($currency) : null // ✨ Pasar moneda en mayúsculas
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json($result['data'], 200);
+    }
     public function getPurchasesByEvent($eventId)
     {
         $result = $this->PurchaseServices->getPurchasesByEvent($eventId);

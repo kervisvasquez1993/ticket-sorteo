@@ -37,7 +37,7 @@ Route::get('main-prizes', [EventPrizeController::class, 'getAllMainPrizes']);
 // ============================================
 Route::get('/events-prices', [EventPriceController::class, 'index']);
 Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
-
+Route::get('purchases/event/{eventId}/top-buyers', [PurchaseController::class, 'getTopBuyers']);
 // ============================================
 // RUTAS PÚBLICAS - COMPRAS (PURCHASES)
 // ============================================
@@ -103,6 +103,7 @@ Route::middleware('auth:api')->group(function () {
     // COMPRAS - LISTADOS GENERALES
     Route::get('purchases', [PurchaseController::class, 'index']);
     Route::get('purchases/event/{eventId}', [PurchaseController::class, 'getPurchasesByEvent']);
+
 
     // MÉTODOS DE PAGO - ADMIN
     Route::prefix('payment-methods')->group(function () {

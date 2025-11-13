@@ -1401,4 +1401,107 @@ class PurchaseRepository implements IPurchaseRepository
             throw $e;
         }
     }
+
+    /**
+     * ✨ ACTUALIZADO: Obtener top de compradores por evento
+     *
+     * Excluye:
+     * - Usuarios con rol de administrador
+     * - Cédula específica: 25672732 / V-25672732
+     * - Compras que NO están en status 'completed'
+     *
+     * @param string $eventId ID del evento
+     * @param int $limit Cantidad máxima de resultados
+     * @param int $minTickets Mínimo de tickets para aparecer en el top
+     * @return array
+     */
+    /**
+     * ✨ ACTUALIZADO: Obtener top de compradores por evento con filtro de moneda
+     *
+     * Excluye:
+     * - Usuarios con rol de administrador
+     * - Cédula específica: 25672732 / V-25672732
+     * - Compras que NO están en status 'completed'
+     *
+     * Filtra:
+     * - Por moneda específica si se proporciona (BS o USD)
+     *
+     * @param string $eventId ID del evento
+     * @param int $limit Cantidad máxima de resultados
+     * @param int $minTickets Mínimo de tickets para aparecer en el top
+     * @param string|null $currency Moneda para filtrar (BS, USD, o null para todas)
+     * @return array
+     */
+    public function getTopBuyersByEvent(
+        string $eventId,
+        int $limit = 10,
+        int $minTickets = 1,
+        ?string $currency = null
+    ): array {
+        $query = Purchase::select(
+            'purchases.identificacion',
+            'purchases.fullname',
+            'purchases.user_id',
+            'purchases.currency', // ✨ Incluir currency en el select
+            DB::raw('COUNT(CASE
+            WHEN purchases.status = \'completed\'
+            AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
+            THEN 1
+        END) as total_tickets'),
+            DB::raw('SUM(CASE
+            WHEN purchases.status = \'completed\'
+            AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
+            THEN purchases.amount
+            ELSE 0
+        END) as total_amount') // ✨ Total gastado
+        )
+            ->leftJoin('users', 'purchases.user_id', '=', 'users.id')
+            ->where('purchases.event_id', $eventId)
+            ->where('purchases.status', 'completed')
+            ->whereNotNull('purchases.identificacion')
+            ->whereNotNull('purchases.fullname')
+
+            // ✅ EXCLUIR ADMINISTRADORES
+            ->where(function ($query) {
+                $query->whereNull('users.id')
+                    ->orWhere('users.role', '!=', 'admin');
+            })
+
+            // ✅ EXCLUIR CÉDULA ESPECÍFICA
+            ->where('purchases.identificacion', 'NOT LIKE', '%25672732%');
+
+        // ✨ FILTRAR POR MONEDA SI SE ESPECIFICA
+        if ($currency) {
+            $query->where('purchases.currency', $currency);
+        }
+
+        $query->groupBy('purchases.identificacion', 'purchases.fullname', 'purchases.user_id', 'purchases.currency')
+            ->havingRaw(
+                'COUNT(CASE
+            WHEN purchases.status = ?
+            AND (purchases.ticket_number NOT LIKE ? OR purchases.ticket_number IS NULL)
+            THEN 1
+        END) >= ?',
+                ['completed', 'RECHAZADO%', $minTickets]
+            )
+            ->orderByRaw('COUNT(CASE
+        WHEN purchases.status = \'completed\'
+        AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
+        THEN 1
+    END) DESC')
+            ->limit($limit);
+
+        $results = $query->get();
+
+        return $results->map(function ($buyer, $index) {
+            return [
+                'rank' => $index + 1,
+                'identificacion' => $buyer->identificacion,
+                'fullname' => $buyer->fullname,
+                'total_tickets' => (int) $buyer->total_tickets,
+                'total_amount' => number_format((float) $buyer->total_amount, 2), // ✨ Total gastado
+                'currency' => $buyer->currency, // ✨ Moneda
+            ];
+        })->toArray();
+    }
 }

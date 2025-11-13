@@ -322,4 +322,11 @@ interface IPurchaseRepository
      * @deprecated Usar bulkInsertPurchases() en su lugar
      */
     public function createAdminRandomPurchase(DTOsPurchase $data, $amount, $transactionId): Purchase;
+
+    public function getTopBuyersByEvent(
+        string $eventId,
+        int $limit = 10,
+        int $minTickets = 1,
+        ?string $currency = null
+    );
 }

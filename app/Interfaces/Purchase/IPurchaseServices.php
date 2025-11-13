@@ -147,4 +147,5 @@ interface IPurchaseServices
      * @return array [success, message, data]
      */
     public function updatePendingPurchaseQuantity(DTOsUpdatePurchaseQuantity $dto): array;
+    public function getTopBuyersByEvent(string $eventId, int $limit = 10, int $minTickets = 1);
 }
