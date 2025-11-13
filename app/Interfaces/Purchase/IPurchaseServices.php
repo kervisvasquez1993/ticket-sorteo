@@ -3,6 +3,7 @@
 namespace App\Interfaces\Purchase;
 
 use App\DTOs\Purchase\DTOsAddTickets;
+use App\DTOs\Purchase\DTOsAvailableNumbersFilter;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\DTOs\Purchase\DTOsUpdatePurchaseQuantity;
@@ -148,4 +149,5 @@ interface IPurchaseServices
      */
     public function updatePendingPurchaseQuantity(DTOsUpdatePurchaseQuantity $dto): array;
     public function getTopBuyersByEvent(string $eventId, int $limit = 10, int $minTickets = 1);
+     public function getAvailableNumbers(DTOsAvailableNumbersFilter $filters): array;
 }

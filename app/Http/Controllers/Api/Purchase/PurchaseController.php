@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Purchase;
 
 use App\DTOs\Purchase\DTOsAddTickets;
+use App\DTOs\Purchase\DTOsAvailableNumbersFilter;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\DTOs\Purchase\DTOsUpdatePurchaseQuantity;
@@ -14,6 +15,7 @@ use App\Http\Requests\Purchase\CreateAdminPurchaseRequest;
 use App\Http\Requests\Purchase\CreateAdminRandomPurchaseRequest;
 use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
+use App\Http\Requests\Purchase\GetAvailableNumbersRequest;
 use App\Http\Requests\Purchase\GetPurchasesByIdentificacionRequest;
 use App\Http\Requests\Purchase\GetPurchasesByWhatsAppRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseQuantityRequest;
@@ -670,4 +672,63 @@ class PurchaseController extends Controller
             'data' => $result['data']
         ], 200);
     }
+
+    /**
+     * ✅ NUEVO: Obtener números disponibles de un evento
+     *
+     * Ruta: GET /api/events/{eventId}/available-numbers
+     *
+     * Query Parameters:
+     * - search: Buscar números que contengan este texto (ej: ?search=123)
+     * - min_number: Filtrar desde este número (ej: ?min_number=1000)
+     * - max_number: Filtrar hasta este número (ej: ?max_number=2000)
+     * - page: Página actual (default: 1)
+     * - per_page: Resultados por página (default: 30, max: 100)
+     *
+     * Ejemplos:
+     * 1. Listar primeros 30 números disponibles:
+     *    GET /api/events/1/available-numbers
+     *
+     * 2. Buscar números que contengan "123":
+     *    GET /api/events/1/available-numbers?search=123
+     *
+     * 3. Números disponibles entre 1000 y 2000:
+     *    GET /api/events/1/available-numbers?min_number=1000&max_number=2000
+     *
+     * 4. Segunda página con 50 resultados:
+     *    GET /api/events/1/available-numbers?page=2&per_page=50
+     *
+     * 5. Combinar filtros:
+     *    GET /api/events/1/available-numbers?search=5&min_number=500&max_number=1500&per_page=50
+     */
+    public function getAvailableNumbers(GetAvailableNumbersRequest $request, string $eventId)
+    {
+        $filters = DTOsAvailableNumbersFilter::fromRequest($request, (int) $eventId);
+
+        $result = $this->PurchaseServices->getAvailableNumbers($filters);
+
+        if (!$result['success']) {
+            return response()->json([
+                'error' => $result['message']
+            ], 422);
+        }
+
+        return response()->json($result['data'], 200);
+    }
+    // public function checkSingleNumber(string $eventId, string $ticketNumber)
+    // {
+    //     $result = $this->PurchaseServices->checkSingleNumberAvailability(
+    //         (int) $eventId,
+    //         $ticketNumber
+    //     );
+
+    //     if (!$result['success']) {
+    //         return response()->json([
+    //             'error' => $result['message'],
+    //             'data' => $result['data'] ?? null
+    //         ], $result['available'] === false ? 200 : 422);
+    //     }
+
+    //     return response()->json($result['data'], 200);
+    // }
 }

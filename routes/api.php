@@ -38,6 +38,8 @@ Route::get('main-prizes', [EventPrizeController::class, 'getAllMainPrizes']);
 Route::get('/events-prices', [EventPriceController::class, 'index']);
 Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
 Route::get('purchases/event/{eventId}/top-buyers', [PurchaseController::class, 'getTopBuyers']);
+Route::get('purchases/event/{eventId}/available-numbers', [PurchaseController::class, 'getAvailableNumbers']);
+    // Route::get('/check-number/{ticketNumber}', [PurchaseController::class, 'checkSingleNumber']);
 // ============================================
 // RUTAS PÚBLICAS - COMPRAS (PURCHASES)
 // ============================================

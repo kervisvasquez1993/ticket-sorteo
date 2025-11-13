@@ -3,6 +3,7 @@
 namespace App\Services\Purchase;
 
 use App\DTOs\Purchase\DTOsAddTickets;
+use App\DTOs\Purchase\DTOsAvailableNumbersFilter;
 use Exception;
 use App\Models\Event;
 use App\Models\Purchase;
@@ -1636,6 +1637,135 @@ class PurchaseServices implements IPurchaseServices
             return [
                 'success' => false,
                 'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    public function getAvailableNumbers(DTOsAvailableNumbersFilter $filters): array
+    {
+        try {
+            // Validar evento
+            $event = Event::findOrFail($filters->getEventId());
+
+            if ($event->status !== 'active') {
+                return [
+                    'success' => false,
+                    'message' => 'Este evento no está activo'
+                ];
+            }
+
+            // Validar rangos si se proporcionan
+            if ($filters->getMinNumber() && $filters->getMinNumber() < $event->start_number) {
+                return [
+                    'success' => false,
+                    'message' => "El número mínimo debe ser mayor o igual a {$event->start_number}"
+                ];
+            }
+
+            if ($filters->getMaxNumber() && $filters->getMaxNumber() > $event->end_number) {
+                return [
+                    'success' => false,
+                    'message' => "El número máximo debe ser menor o igual a {$event->end_number}"
+                ];
+            }
+
+            // Obtener números disponibles
+            $result = $this->PurchaseRepository->getAvailableNumbers(
+                $filters->getEventId(),
+                $event->start_number,
+                $event->end_number,
+                $filters
+            );
+
+            return [
+                'success' => true,
+                'data' => [
+                    'event' => [
+                        'id' => $event->id,
+                        'name' => $event->name,
+                        'range' => [
+                            'start' => $event->start_number,
+                            'end' => $event->end_number
+                        ]
+                    ],
+                    'available_numbers' => $result['data'],
+                    'pagination' => $result['pagination'],
+                    'statistics' => $result['statistics'],
+                    'filters_applied' => $filters->hasFilters() ? $filters->toArray() : null
+                ],
+                'message' => 'Números disponibles obtenidos exitosamente'
+            ];
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return [
+                'success' => false,
+                'message' => 'Evento no encontrado'
+            ];
+        } catch (Exception $exception) {
+            Log::error('Error obteniendo números disponibles', [
+                'filters' => $filters->toArray(),
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Error al obtener números disponibles: ' . $exception->getMessage()
+            ];
+        }
+    }
+    public function checkSingleNumberAvailability(int $eventId, string $ticketNumber): array
+    {
+        try {
+            $event = Event::findOrFail($eventId);
+
+            // Validar que el número esté en el rango
+            $ticketNumberInt = (int) $ticketNumber;
+
+            if ($ticketNumberInt < $event->start_number || $ticketNumberInt > $event->end_number) {
+                return [
+                    'success' => false,
+                    'available' => false,
+                    'message' => "El número {$ticketNumber} está fuera del rango válido ({$event->start_number} - {$event->end_number})",
+                    'data' => [
+                        'ticket_number' => $ticketNumber,
+                        'event_id' => $eventId,
+                        'valid_range' => [
+                            'start' => $event->start_number,
+                            'end' => $event->end_number
+                        ]
+                    ]
+                ];
+            }
+            $result = $this->PurchaseRepository->checkNumberAvailability($eventId, $ticketNumber);
+
+            return [
+                'success' => true,
+                'available' => $result['available'],
+                'message' => $result['message'],
+                'data' => [
+                    'event' => [
+                        'id' => $event->id,
+                        'name' => $event->name
+                    ],
+                    'ticket_number' => $ticketNumber,
+                    'status' => $result['status'],
+                    'purchase_info' => $result['purchase_info'] ?? null
+                ]
+            ];
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return [
+                'success' => false,
+                'message' => 'Evento no encontrado'
+            ];
+        } catch (Exception $exception) {
+            Log::error('Error verificando disponibilidad de número', [
+                'event_id' => $eventId,
+                'ticket_number' => $ticketNumber,
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Error al verificar disponibilidad: ' . $exception->getMessage()
             ];
         }
     }

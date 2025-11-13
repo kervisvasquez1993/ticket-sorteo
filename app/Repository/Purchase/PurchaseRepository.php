@@ -3,6 +3,7 @@
 namespace App\Repository\Purchase;
 
 use App\DTOs\Purchase\DTOsAddTickets;
+use App\DTOs\Purchase\DTOsAvailableNumbersFilter;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Interfaces\Purchase\IPurchaseRepository;
@@ -1503,5 +1504,122 @@ class PurchaseRepository implements IPurchaseRepository
                 'currency' => $buyer->currency, // ✨ Moneda
             ];
         })->toArray();
+    }
+
+    public function getAvailableNumbers(
+        int $eventId,
+        int $startNumber,
+        int $endNumber,
+        ?DTOsAvailableNumbersFilter $filters = null
+    ): array {
+        // 1. Obtener números reservados (excluyendo rechazados)
+        $reservedNumbers = Purchase::where('event_id', $eventId)
+            ->whereNotNull('ticket_number')
+            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
+            ->where('status', '!=', 'failed')
+            ->pluck('ticket_number')
+            ->toArray();
+
+        // 2. Generar rango completo
+        $allNumbers = range($startNumber, $endNumber);
+        $availableNumbers = array_diff($allNumbers, $reservedNumbers);
+
+        // 3. Aplicar filtros si existen
+        if ($filters) {
+            $availableNumbers = $this->applyNumberFilters($availableNumbers, $filters);
+        }
+
+        // 4. Ordenar
+        sort($availableNumbers);
+
+        // 5. Calcular estadísticas
+        $totalAvailable = count($availableNumbers);
+        $totalReserved = count($reservedNumbers);
+        $totalNumbers = count($allNumbers);
+
+        // 6. Aplicar paginación
+        $page = $filters ? $filters->getPage() : 1;
+        $perPage = $filters ? $filters->getPerPage() : 30;
+
+        $offset = ($page - 1) * $perPage;
+        $paginatedNumbers = array_slice($availableNumbers, $offset, $perPage);
+
+        // 7. Formatear respuesta
+        return [
+            'data' => array_values($paginatedNumbers),
+            'pagination' => [
+                'total' => $totalAvailable,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => ceil($totalAvailable / $perPage),
+                'from' => $offset + 1,
+                'to' => min($offset + $perPage, $totalAvailable)
+            ],
+            'statistics' => [
+                'total_numbers' => $totalNumbers,
+                'available' => $totalAvailable,
+                'reserved' => $totalReserved,
+                'availability_percentage' => round(($totalAvailable / $totalNumbers) * 100, 2)
+            ]
+        ];
+    }
+
+    private function applyNumberFilters(array $numbers, DTOsAvailableNumbersFilter $filters): array
+    {
+        // Filtro por búsqueda (número contiene el texto)
+        if ($search = $filters->getSearch()) {
+            $numbers = array_filter($numbers, function ($number) use ($search) {
+                return str_contains((string)$number, $search);
+            });
+        }
+
+        // Filtro por rango mínimo
+        if ($minNumber = $filters->getMinNumber()) {
+            $numbers = array_filter($numbers, function ($number) use ($minNumber) {
+                return $number >= $minNumber;
+            });
+        }
+
+        if ($maxNumber = $filters->getMaxNumber()) {
+            $numbers = array_filter($numbers, function ($number) use ($maxNumber) {
+                return $number <= $maxNumber;
+            });
+        }
+
+        return array_values($numbers);
+    }
+
+    /**
+     * ✅ NUEVO: Verificar si un número específico está disponible (más detallado)
+     */
+    public function checkNumberAvailability(int $eventId, string $ticketNumber): array
+    {
+        $purchase = Purchase::where('event_id', $eventId)
+            ->where('ticket_number', $ticketNumber)
+            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
+            ->where('status', '!=', 'failed')
+            ->first();
+
+        if (!$purchase) {
+            return [
+                'available' => true,
+                'status' => 'available',
+                'ticket_number' => $ticketNumber,
+                'message' => 'Número disponible'
+            ];
+        }
+
+        return [
+            'available' => false,
+            'status' => 'reserved',
+            'ticket_number' => $ticketNumber,
+            'message' => 'Número reservado',
+            'purchase_info' => [
+                'transaction_id' => $purchase->transaction_id,
+                'status' => $purchase->status,
+                'reserved_at' => $purchase->created_at->toDateTimeString(),
+                'customer' => $purchase->fullname ?? 'N/A'
+            ]
+        ];
     }
 }

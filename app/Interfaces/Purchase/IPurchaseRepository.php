@@ -3,6 +3,7 @@
 namespace App\Interfaces\Purchase;
 
 use App\DTOs\Purchase\DTOsAddTickets;
+use App\DTOs\Purchase\DTOsAvailableNumbersFilter;
 use App\DTOs\Purchase\DTOsPurchase;
 use App\DTOs\Purchase\DTOsPurchaseFilter;
 use App\Models\Purchase;
@@ -329,4 +330,11 @@ interface IPurchaseRepository
         int $minTickets = 1,
         ?string $currency = null
     );
+    public function getAvailableNumbers(
+        int $eventId,
+        int $startNumber,
+        int $endNumber,
+        ?DTOsAvailableNumbersFilter $filters = null
+    ): array;
+     public function checkNumberAvailability(int $eventId, string $ticketNumber): array;
 }
