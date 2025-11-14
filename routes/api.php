@@ -23,9 +23,6 @@ Route::get('/users', [AuthController::class, 'index'])->name('users.index')->mid
 Route::post('/test', [AuthController::class, 'test'])->name('test');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth:api');
 
-// ============================================
-// RUTAS PÚBLICAS - EVENTOS
-// ============================================
 Route::get('/events/active', [EventController::class, 'active']);
 Route::get('events/{eventId}/prizes', [EventPrizeController::class, 'getByEvent']);
 Route::get('events/{eventId}/main-prize', [EventPrizeController::class, 'getMainPrize']);
