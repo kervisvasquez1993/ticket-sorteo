@@ -43,23 +43,34 @@ COPY nginx.conf /etc/nginx/sites-available/default
 # Directorio de trabajo
 WORKDIR /var/www/html
 
-# NUEVO: Copiar primero solo composer.json y composer.lock para cachear dependencias
+# OPTIMIZACIÓN: Configurar Composer para timeouts más largos y usar caché
+RUN composer config -g process-timeout 2000 && \
+    composer config -g cache-files-maxsize "1024MiB"
+
+# Copiar SOLO composer.json y composer.lock primero (para aprovechar caché de Docker)
 COPY composer.json composer.lock ./
 
-# NUEVO: Instalar dependencias con timeout aumentado y sin interacción
-RUN COMPOSER_PROCESS_TIMEOUT=600 composer install \
+# Instalar dependencias con reintentos y opciones optimizadas
+RUN composer install \
     --no-dev \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
     --no-interaction \
-    --ignore-platform-reqs
+    --optimize-autoloader \
+    || composer install \
+    --no-dev \
+    --no-scripts \
+    --no-autoloader \
+    --prefer-dist \
+    --no-interaction \
+    --optimize-autoloader
 
-# Copiar el resto de archivos
+# Copiar el resto de archivos DESPUÉS de instalar dependencias
 COPY . .
 
-# NUEVO: Generar autoloader después de copiar todo
-RUN composer dump-autoload --optimize --no-dev
+# Generar autoloader después de copiar todo
+RUN composer dump-autoload --optimize --no-dev --no-interaction
 
 # Crear directorios necesarios (INCLUYE app/secrets/oauth)
 RUN mkdir -p storage/logs \
@@ -69,14 +80,14 @@ RUN mkdir -p storage/logs \
     bootstrap/cache \
     app/secrets/oauth
 
-# Permisos MEJORADOS - www-data debe ser dueño
+# Permisos - www-data debe ser dueño
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
     && chmod -R 775 storage \
     && chmod -R 775 bootstrap/cache \
     && chmod -R 775 app/secrets
 
-# Script de inicio MEJORADO - CAMBIO: Ejecutar comandos como www-data
+# Script de inicio
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
@@ -111,9 +122,6 @@ su -s /bin/bash www-data -c "php artisan view:cache" || true\n\
 \n\
 echo "Iniciando PHP-FPM..."\n\
 php-fpm -D\n\
-\n\
-echo "Iniciando Queue Worker en segundo plano..."\n\
-su -s /bin/bash www-data -c "nohup php artisan queue:work --queue=massive-purchases,default --verbose --tries=3 --timeout=300 > /var/www/html/storage/logs/worker.log 2>&1 &"\n\
 \n\
 echo "Iniciando Nginx..."\n\
 nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
