@@ -396,6 +396,7 @@ class PurchaseServices implements IPurchaseServices
             // CASO 1: SI TIENEN NÚMEROS ASIGNADOS → Solo cambiar status a 'completed'
             // ========================================================================
             if ($purchasesWithNumbers->isNotEmpty()) {
+                /** @var \App\Models\Purchase $purchase */
                 foreach ($purchasesWithNumbers as $purchase) {
                     $this->PurchaseRepository->assignTicketNumber(
                         $purchase->id,
@@ -425,6 +426,7 @@ class PurchaseServices implements IPurchaseServices
 
                 $availableNumbersArray = array_values($availableNumbers);
 
+                /** @var \App\Models\Purchase $purchase */
                 foreach ($purchasesWithoutNumbers as $purchase) {
                     if (empty($availableNumbersArray)) {
                         throw new Exception('Se agotaron los números disponibles durante la asignación.');
@@ -477,7 +479,7 @@ class PurchaseServices implements IPurchaseServices
                     $transactionId,
                     $assignedNumbers,
                     $purchases->count(),
-                    $firstPurchase->fullname // ✅ AGREGAR EL NOMBRE
+                    $firstPurchase->fullname
                 );
                 $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
             } else {

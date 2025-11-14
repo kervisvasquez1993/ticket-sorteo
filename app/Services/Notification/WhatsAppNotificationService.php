@@ -2,6 +2,7 @@
 
 namespace App\Services\Notification;
 
+use App\Models\Purchase;
 use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
@@ -20,7 +21,6 @@ class WhatsAppNotificationService
         $this->frontendUrl = config('app.frontend_url');
         $this->timeout = config('services.whatsapp.timeout', 10);
 
-
         $this->httpClient = new Client([
             'timeout' => $this->timeout,
             'verify' => false,
@@ -33,6 +33,25 @@ class WhatsAppNotificationService
     }
 
     /**
+     * ✅ Formatear array de números de ticket
+     */
+    private function formatTicketNumbers(array $ticketNumbers): array
+    {
+        return array_map(function ($number) {
+            return Purchase::formatTicketNumber($number);
+        }, $ticketNumbers);
+    }
+
+    /**
+     * ✅ Convertir array de tickets formateados a string legible con #
+     */
+    private function formatTicketsForMessage(array $ticketNumbers): string
+    {
+        $formatted = $this->formatTicketNumbers($ticketNumbers);
+        return implode(', ', array_map(fn($num) => "#{$num}", $formatted));
+    }
+
+    /**
      * Enviar notificación de aprobación de compra
      */
     public function sendApprovalNotification(
@@ -40,7 +59,7 @@ class WhatsAppNotificationService
         string $transactionId,
         array $ticketNumbers,
         int $quantity,
-        string $fullname = '' // ✅ NUEVO PARÁMETRO
+        string $fullname = ''
     ): bool {
         if (empty($whatsapp)) {
             Log::info('No se envió notificación: WhatsApp no proporcionado', [
@@ -56,7 +75,7 @@ class WhatsAppNotificationService
             'quantity' => $quantity,
             'purchase_url' => $purchaseUrl,
             'ticket_numbers' => $ticketNumbers,
-            'fullname' => $fullname // ✅ PASAR EL NOMBRE
+            'fullname' => $fullname
         ]);
 
         return $this->sendNotification($whatsapp, $message, $transactionId, 'approval');
@@ -86,13 +105,12 @@ class WhatsAppNotificationService
     }
 
     /**
-     * Construir mensaje de aprobación con enlace clickeable
+     * ✅ Construir mensaje de aprobación con números formateados
      */
     private function buildApprovalMessage(array $data): string
     {
-        // Formatear los números de tickets con el símbolo #
-        $ticketsFormatted = array_map(fn($ticket) => "#{$ticket}", $data['ticket_numbers']);
-        $ticketsText = implode(', ', $ticketsFormatted);
+        // ✅ Formatear los números de tickets usando el método helper
+        $ticketsFormatted = $this->formatTicketsForMessage($data['ticket_numbers']);
 
         // Obtener la URL base desde las variables de entorno
         $baseUrl = rtrim(env('FRONTEND_URL', config('app.url')), '/');
@@ -105,11 +123,12 @@ class WhatsAppNotificationService
 
         return $greeting .
             "✅ *¡Tu compra ha sido aprobada!*\n\n" .
-            "🎫 *Tickets:* {$ticketsText}\n\n" .
+            "🎫 *Tickets:* {$ticketsFormatted}\n\n" .
             "📦 *Cantidad:* {$data['quantity']} ticket(s)\n\n" .
             "🔗 *Ver mi compra:* {$purchaseUrl}\n\n" .
             "¡Gracias por tu compra! 🎉";
     }
+
     /**
      * Construir mensaje de rechazo
      */
@@ -154,7 +173,8 @@ class WhatsAppNotificationService
                 'transaction_id' => $transactionId,
                 'phone' => $phone,
                 'type' => $type,
-                'endpoint' => $endpoint
+                'endpoint' => $endpoint,
+                'message_preview' => substr($message, 0, 100) . '...'
             ]);
 
             // ✅ PAYLOAD: phoneNumber y message
