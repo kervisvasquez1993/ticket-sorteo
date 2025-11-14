@@ -38,5 +38,4 @@ README.md
 *.md
 
 # Docker
-Dockerfile
 docker-compose.yml

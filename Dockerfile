@@ -43,11 +43,23 @@ COPY nginx.conf /etc/nginx/sites-available/default
 # Directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar archivos
+# NUEVO: Copiar primero solo composer.json y composer.lock para cachear dependencias
+COPY composer.json composer.lock ./
+
+# NUEVO: Instalar dependencias con timeout aumentado y sin interacción
+RUN COMPOSER_PROCESS_TIMEOUT=600 composer install \
+    --no-dev \
+    --no-scripts \
+    --no-autoloader \
+    --prefer-dist \
+    --no-interaction \
+    --ignore-platform-reqs
+
+# Copiar el resto de archivos
 COPY . .
 
-# Instalar dependencias
-RUN composer install --no-dev --optimize-autoloader
+# NUEVO: Generar autoloader después de copiar todo
+RUN composer dump-autoload --optimize --no-dev
 
 # Crear directorios necesarios (INCLUYE app/secrets/oauth)
 RUN mkdir -p storage/logs \
