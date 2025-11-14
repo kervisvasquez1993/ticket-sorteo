@@ -1590,18 +1590,16 @@ class PurchaseServices implements IPurchaseServices
         string $eventId,
         int $limit = 10,
         int $minTickets = 1,
-        ?string $currency = null // ✨ VES o USD
+        ?string $currency = null // ⚠️ Ya no se usa pero se mantiene por compatibilidad
     ): array {
         try {
-            // Validar que el evento existe
             $event = Event::findOrFail($eventId);
 
-            // Obtener top compradores desde el repository
             $topBuyers = $this->PurchaseRepository->getTopBuyersByEvent(
                 $eventId,
                 $limit,
                 $minTickets,
-                $currency // ✨ Pasar moneda al repository
+                null // ✨ Siempre pasamos null porque ya no filtramos por moneda
             );
 
             return [
@@ -1612,15 +1610,12 @@ class PurchaseServices implements IPurchaseServices
                         'name' => $event->name,
                         'status' => $event->status,
                     ],
-                    'currency_filter' => $currency, // ✨ VES, USD o null
                     'top_buyers' => $topBuyers,
                     'total_buyers' => count($topBuyers),
                     'limit' => $limit,
                     'min_tickets_filter' => $minTickets
                 ],
-                'message' => $currency
-                    ? "Top de compradores en {$currency} obtenido exitosamente"
-                    : 'Top de compradores obtenido exitosamente'
+                'message' => 'Top de compradores obtenido exitosamente (todas las monedas)'
             ];
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return [
@@ -1630,7 +1625,6 @@ class PurchaseServices implements IPurchaseServices
         } catch (Exception $exception) {
             Log::error('Error obteniendo top de compradores', [
                 'event_id' => $eventId,
-                'currency' => $currency,
                 'error' => $exception->getMessage()
             ]);
 

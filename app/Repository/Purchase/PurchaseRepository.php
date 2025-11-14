@@ -97,6 +97,11 @@ class PurchaseRepository implements IPurchaseRepository
         ?string $ticketNumber = null,
         string $status = 'pending'
     ): array {
+        $formattedTicketNumber = null;
+        if (!is_null($ticketNumber)) {
+            $formattedTicketNumber = \App\Models\Purchase::formatTicketNumber($ticketNumber);
+        }
+
         return [
             'event_id' => $data->getEventId(),
             'event_price_id' => $data->getEventPriceId(),
@@ -107,7 +112,7 @@ class PurchaseRepository implements IPurchaseRepository
             'whatsapp' => $data->getWhatsapp(),
             'identificacion' => $data->getIdentificacion(),
             'currency' => $data->getCurrency(),
-            'ticket_number' => $ticketNumber,
+            'ticket_number' => $formattedTicketNumber,
             'amount' => $amount,
             'total_amount' => $amount,
             'quantity' => 1,
@@ -242,9 +247,11 @@ class PurchaseRepository implements IPurchaseRepository
      */
     public function assignTicketNumber(int $purchaseId, string $ticketNumber, string $status = 'completed'): bool
     {
+        $formattedTicketNumber = \App\Models\Purchase::formatTicketNumber($ticketNumber);
+
         return Purchase::where('id', $purchaseId)
             ->update([
-                'ticket_number' => $ticketNumber,
+                'ticket_number' => $formattedTicketNumber,
                 'status' => $status,
                 'updated_at' => now()
             ]) > 0;
@@ -740,13 +747,15 @@ class PurchaseRepository implements IPurchaseRepository
             ->pluck('id')
             ->toArray();
 
-        // ✅ Solo tickets válidos (no rechazados Y no failed)
         $ticketNumbers = Purchase::where('transaction_id', $group->transaction_id)
             ->whereNotNull('ticket_number')
             ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
             ->where('status', '!=', 'failed')
             ->orderBy('ticket_number', 'asc')
             ->pluck('ticket_number')
+            ->map(function ($number) {
+                return \App\Models\Purchase::formatTicketNumber($number);
+            })
             ->toArray();
 
         $userData = null;
@@ -1146,6 +1155,7 @@ class PurchaseRepository implements IPurchaseRepository
         $now = now();
 
         foreach ($ticketsToAdd as $ticketNumber) {
+            $formattedTicketNumber = \App\Models\Purchase::formatTicketNumber($ticketNumber);
             $purchaseRecords[] = [
                 // ✅ Clonar TODOS los datos de la compra de referencia
                 'event_id' => $referencePurchase->event_id,
@@ -1166,10 +1176,7 @@ class PurchaseRepository implements IPurchaseRepository
                 'qr_code_url' => $referencePurchase->qr_code_url,
                 'status' => $referencePurchase->status,
                 'is_admin_purchase' => $referencePurchase->is_admin_purchase,
-
-                // ✅ Solo cambia el número de ticket
-                'ticket_number' => $ticketNumber,
-
+                'ticket_number' => $formattedTicketNumber,
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
@@ -1403,36 +1410,6 @@ class PurchaseRepository implements IPurchaseRepository
         }
     }
 
-    /**
-     * ✨ ACTUALIZADO: Obtener top de compradores por evento
-     *
-     * Excluye:
-     * - Usuarios con rol de administrador
-     * - Cédula específica: 25672732 / V-25672732
-     * - Compras que NO están en status 'completed'
-     *
-     * @param string $eventId ID del evento
-     * @param int $limit Cantidad máxima de resultados
-     * @param int $minTickets Mínimo de tickets para aparecer en el top
-     * @return array
-     */
-    /**
-     * ✨ ACTUALIZADO: Obtener top de compradores por evento con filtro de moneda
-     *
-     * Excluye:
-     * - Usuarios con rol de administrador
-     * - Cédula específica: 25672732 / V-25672732
-     * - Compras que NO están en status 'completed'
-     *
-     * Filtra:
-     * - Por moneda específica si se proporciona (BS o USD)
-     *
-     * @param string $eventId ID del evento
-     * @param int $limit Cantidad máxima de resultados
-     * @param int $minTickets Mínimo de tickets para aparecer en el top
-     * @param string|null $currency Moneda para filtrar (BS, USD, o null para todas)
-     * @return array
-     */
     public function getTopBuyersByEvent(
         string $eventId,
         int $limit = 10,
@@ -1443,18 +1420,28 @@ class PurchaseRepository implements IPurchaseRepository
             'purchases.identificacion',
             'purchases.fullname',
             'purchases.user_id',
-            'purchases.currency', // ✨ Incluir currency en el select
+            // ✨ Contar tickets totales (todas las monedas)
             DB::raw('COUNT(CASE
             WHEN purchases.status = \'completed\'
             AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
             THEN 1
         END) as total_tickets'),
+            // ✨ Sumar montos en VES
             DB::raw('SUM(CASE
             WHEN purchases.status = \'completed\'
+            AND purchases.currency = \'VES\'
             AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
             THEN purchases.amount
             ELSE 0
-        END) as total_amount') // ✨ Total gastado
+        END) as total_amount_ves'),
+            // ✨ Sumar montos en USD
+            DB::raw('SUM(CASE
+            WHEN purchases.status = \'completed\'
+            AND purchases.currency = \'USD\'
+            AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
+            THEN purchases.amount
+            ELSE 0
+        END) as total_amount_usd')
         )
             ->leftJoin('users', 'purchases.user_id', '=', 'users.id')
             ->where('purchases.event_id', $eventId)
@@ -1471,25 +1458,22 @@ class PurchaseRepository implements IPurchaseRepository
             // ✅ EXCLUIR CÉDULA ESPECÍFICA
             ->where('purchases.identificacion', 'NOT LIKE', '%25672732%');
 
-        // ✨ FILTRAR POR MONEDA SI SE ESPECIFICA
-        if ($currency) {
-            $query->where('purchases.currency', $currency);
-        }
-
-        $query->groupBy('purchases.identificacion', 'purchases.fullname', 'purchases.user_id', 'purchases.currency')
+        // ✨ AGRUPAR SOLO POR USUARIO (sin currency)
+        $query->groupBy('purchases.identificacion', 'purchases.fullname', 'purchases.user_id')
             ->havingRaw(
                 'COUNT(CASE
-            WHEN purchases.status = ?
-            AND (purchases.ticket_number NOT LIKE ? OR purchases.ticket_number IS NULL)
-            THEN 1
-        END) >= ?',
+                WHEN purchases.status = ?
+                AND (purchases.ticket_number NOT LIKE ? OR purchases.ticket_number IS NULL)
+                THEN 1
+            END) >= ?',
                 ['completed', 'RECHAZADO%', $minTickets]
             )
+            // ✨ ORDENAR POR TOTAL DE TICKETS (todas las monedas)
             ->orderByRaw('COUNT(CASE
-        WHEN purchases.status = \'completed\'
-        AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
-        THEN 1
-    END) DESC')
+            WHEN purchases.status = \'completed\'
+            AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
+            THEN 1
+        END) DESC')
             ->limit($limit);
 
         $results = $query->get();
@@ -1500,8 +1484,17 @@ class PurchaseRepository implements IPurchaseRepository
                 'identificacion' => $buyer->identificacion,
                 'fullname' => $buyer->fullname,
                 'total_tickets' => (int) $buyer->total_tickets,
-                'total_amount' => number_format((float) $buyer->total_amount, 2), // ✨ Total gastado
-                'currency' => $buyer->currency, // ✨ Moneda
+                // ✨ Mostrar totales separados por moneda
+                'purchases' => [
+                    'ves' => [
+                        'amount' => number_format((float) $buyer->total_amount_ves, 2),
+                        'currency' => 'VES'
+                    ],
+                    'usd' => [
+                        'amount' => number_format((float) $buyer->total_amount_usd, 2),
+                        'currency' => 'USD'
+                    ]
+                ]
             ];
         })->toArray();
     }
@@ -1512,7 +1505,7 @@ class PurchaseRepository implements IPurchaseRepository
         int $endNumber,
         ?DTOsAvailableNumbersFilter $filters = null
     ): array {
-        // 1. Obtener números reservados (excluyendo rechazados)
+        // 1. Obtener números reservados (excluyendo rechazados) - YA FORMATEADOS en BD
         $reservedNumbers = Purchase::where('event_id', $eventId)
             ->whereNotNull('ticket_number')
             ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
@@ -1520,33 +1513,38 @@ class PurchaseRepository implements IPurchaseRepository
             ->pluck('ticket_number')
             ->toArray();
 
-        // 2. Generar rango completo
-        $allNumbers = range($startNumber, $endNumber);
+        // 2. ✅ Generar rango completo CON FORMATO
+        $allNumbers = [];
+        for ($i = $startNumber; $i <= $endNumber; $i++) {
+            $allNumbers[] = str_pad($i, 4, '0', STR_PAD_LEFT);
+        }
+
+        // 3. Obtener números disponibles (los que NO están en reservados)
         $availableNumbers = array_diff($allNumbers, $reservedNumbers);
 
-        // 3. Aplicar filtros si existen
+        // 4. Aplicar filtros si existen
         if ($filters) {
             $availableNumbers = $this->applyNumberFilters($availableNumbers, $filters);
         }
 
-        // 4. Ordenar
+        // 5. Ordenar (ahora son strings, ordenarán correctamente)
         sort($availableNumbers);
 
-        // 5. Calcular estadísticas
+        // 6. Calcular estadísticas
         $totalAvailable = count($availableNumbers);
         $totalReserved = count($reservedNumbers);
         $totalNumbers = count($allNumbers);
 
-        // 6. Aplicar paginación
+        // 7. Aplicar paginación
         $page = $filters ? $filters->getPage() : 1;
         $perPage = $filters ? $filters->getPerPage() : 30;
 
         $offset = ($page - 1) * $perPage;
         $paginatedNumbers = array_slice($availableNumbers, $offset, $perPage);
 
-        // 7. Formatear respuesta
+        // 8. Formatear respuesta
         return [
-            'data' => array_values($paginatedNumbers),
+            'data' => array_values($paginatedNumbers), // ✅ Ya formateados
             'pagination' => [
                 'total' => $totalAvailable,
                 'per_page' => $perPage,
@@ -1575,14 +1573,17 @@ class PurchaseRepository implements IPurchaseRepository
 
         // Filtro por rango mínimo
         if ($minNumber = $filters->getMinNumber()) {
-            $numbers = array_filter($numbers, function ($number) use ($minNumber) {
-                return $number >= $minNumber;
+            $minNumberFormatted = str_pad($minNumber, 4, '0', STR_PAD_LEFT);
+            $numbers = array_filter($numbers, function ($number) use ($minNumberFormatted) {
+                return $number >= $minNumberFormatted;
             });
         }
 
+        // Filtro por rango máximo
         if ($maxNumber = $filters->getMaxNumber()) {
-            $numbers = array_filter($numbers, function ($number) use ($maxNumber) {
-                return $number <= $maxNumber;
+            $maxNumberFormatted = str_pad($maxNumber, 4, '0', STR_PAD_LEFT);
+            $numbers = array_filter($numbers, function ($number) use ($maxNumberFormatted) {
+                return $number <= $maxNumberFormatted;
             });
         }
 

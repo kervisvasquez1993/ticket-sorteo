@@ -175,18 +175,12 @@ class CreateSinglePurchaseRequest extends FormRequest
                 'string',
                 'max:255',
                 function ($attribute, $value, $fail) {
-                    $identificacion = $this->input('identificacion');
-
-                    if (!$identificacion) {
-                        return;
-                    }
-
-                    $existingPurchase = \App\Models\Purchase::where('identificacion', $identificacion)
-                        ->where('payment_reference', $value)
+                    // Verificar si la referencia ya existe en cualquier compra
+                    $existingPurchase = \App\Models\Purchase::where('payment_reference', $value)
                         ->exists();
 
                     if ($existingPurchase) {
-                        $fail('Ya has utilizado esta referencia de pago anteriormente.');
+                        $fail('Esta referencia de pago ya ha sido utilizada. Por favor, verifica tu número de referencia.');
                     }
                 },
             ],

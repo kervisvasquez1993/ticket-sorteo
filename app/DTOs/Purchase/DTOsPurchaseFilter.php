@@ -6,6 +6,16 @@ use Illuminate\Http\Request;
 
 class DTOsPurchaseFilter
 {
+     private static function formatTicketNumberSearch(?string $ticketNumber): ?string
+    {
+        if (is_null($ticketNumber) || empty($ticketNumber)) {
+            return null;
+        }
+        if (is_numeric($ticketNumber)) {
+            return str_pad((int)$ticketNumber, 4, '0', STR_PAD_LEFT);
+        }
+        return $ticketNumber;
+    }
     public function __construct(
         private readonly ?int $user_id = null,
         private readonly ?int $event_id = null,
@@ -37,7 +47,7 @@ class DTOsPurchaseFilter
             date_from: $request->get('date_from'),
             date_to: $request->get('date_to'),
             search: $request->get('search'),
-            ticket_number: $request->get('ticket_number'),
+            ticket_number: self::formatTicketNumberSearch($request->get('ticket_number')),
             fullname: $request->get('fullname'), // ✨ NUEVO
             min_quantity: $request->get('min_quantity') ? (int) $request->get('min_quantity') : null, // ✨ NUEVO
             sort_by: $request->get('sort_by', 'quantity'), // ✨ CAMBIADO

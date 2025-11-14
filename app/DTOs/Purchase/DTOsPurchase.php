@@ -15,6 +15,18 @@ use Illuminate\Support\Facades\Storage;
 
 class DTOsPurchase
 {
+    private static function formatTicketNumbers(?array $numbers): ?array
+    {
+        if (is_null($numbers) || empty($numbers)) {
+            return null;
+        }
+        return array_map(function ($number) {
+            if (is_string($number) && str_starts_with($number, 'RECHAZADO')) {
+                return $number;
+            }
+            return str_pad((int)$number, 4, '0', STR_PAD_LEFT);
+        }, $numbers);
+    }
     public function __construct(
         private readonly int $event_id,
         private readonly int $event_price_id,
@@ -52,7 +64,7 @@ class DTOsPurchase
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::check() ? Auth::id() : null,
-            specific_numbers: $validated['specific_numbers'] ?? null,
+            specific_numbers: self::formatTicketNumbers($validated['specific_numbers'] ?? null),
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,
@@ -100,7 +112,7 @@ class DTOsPurchase
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::check() ? Auth::id() : null,
-            specific_numbers: $validated['specific_numbers'] ?? null,
+            specific_numbers: self::formatTicketNumbers($validated['specific_numbers'] ?? null),
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: null,
             total_amount: $totalAmount,
@@ -109,13 +121,14 @@ class DTOsPurchase
 
     public static function fromSinglePurchaseRequest(CreateSinglePurchaseRequest $request): self
     {
+
         $validated = $request->validated();
         $paymentProofUrl = self::uploadPaymentProofToS3Single($request);
 
         $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
-        $ticketCount = count($validated['ticket_numbers']);
+        $formattedTicketNumbers = self::formatTicketNumbers($validated['ticket_numbers']);
+        $ticketCount = count($formattedTicketNumbers);
         $totalAmount = $eventPrice->amount * $ticketCount;
-
         return new self(
             event_id: $validated['event_id'],
             event_price_id: $validated['event_price_id'],
@@ -127,7 +140,7 @@ class DTOsPurchase
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::check() ? Auth::id() : null,
-            specific_numbers: $validated['ticket_numbers'],
+            specific_numbers: $formattedTicketNumbers,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,
@@ -232,7 +245,8 @@ class DTOsPurchase
         }
 
         $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
-        $ticketCount = count($validated['ticket_numbers']);
+          $formattedTicketNumbers = self::formatTicketNumbers($validated['ticket_numbers']);
+        $ticketCount = count($formattedTicketNumbers);
         $totalAmount = $eventPrice->amount * $ticketCount;
 
         return new self(
@@ -246,7 +260,7 @@ class DTOsPurchase
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::id(),
-            specific_numbers: $validated['ticket_numbers'],
+            specific_numbers:  $formattedTicketNumbers,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,

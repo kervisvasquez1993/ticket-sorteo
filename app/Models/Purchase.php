@@ -427,4 +427,54 @@ class Purchase extends Model
                 ->orWhere('ticket_number', 'NOT LIKE', 'RECHAZADO%');
         });
     }
+
+    public static function formatTicketNumber($number): string | null
+    {
+        if (is_null($number)) {
+            return null;
+        }
+        if (is_string($number) && str_starts_with($number, 'RECHAZADO')) {
+            return $number;
+        }
+
+        return str_pad((int)$number, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * ✅ Accessor para formatear automáticamente al leer
+     */
+    public function getTicketNumberAttribute($value): ?string
+    {
+        if (is_null($value)) {
+            return null;
+        }
+
+        // Si ya es un número rechazado, retornar sin formatear
+        if (str_starts_with($value, 'RECHAZADO')) {
+            return $value;
+        }
+
+        // Formatear a 4 dígitos
+        return str_pad((int)$value, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * ✅ Mutator para formatear automáticamente al guardar
+     */
+    public function setTicketNumberAttribute($value): void
+    {
+        if (is_null($value)) {
+            $this->attributes['ticket_number'] = null;
+            return;
+        }
+
+        // Si ya es un número rechazado, guardar tal cual
+        if (is_string($value) && str_starts_with($value, 'RECHAZADO')) {
+            $this->attributes['ticket_number'] = $value;
+            return;
+        }
+
+        // Formatear a 4 dígitos antes de guardar
+        $this->attributes['ticket_number'] = str_pad((int)$value, 4, '0', STR_PAD_LEFT);
+    }
 }

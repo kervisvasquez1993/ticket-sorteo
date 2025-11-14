@@ -6,6 +6,16 @@ use Illuminate\Http\Request;
 
 class DTOsAvailableNumbersFilter
 {
+    private static function formatSearchNumber(?string $search): ?string
+    {
+        if (is_null($search) || empty($search)) {
+            return null;
+        }
+        if (is_numeric($search)) {
+            return str_pad((int)$search, 4, '0', STR_PAD_LEFT);
+        }
+        return $search;
+    }
     public function __construct(
         private readonly int $event_id,
         private readonly ?string $search = null,
@@ -19,7 +29,7 @@ class DTOsAvailableNumbersFilter
     {
         return new self(
             event_id: $eventId,
-            search: $request->get('search'),
+             search: self::formatSearchNumber($request->get('search')),
             min_number: $request->get('min_number') ? (int) $request->get('min_number') : null,
             max_number: $request->get('max_number') ? (int) $request->get('max_number') : null,
             page: (int) $request->get('page', 1),
@@ -42,17 +52,35 @@ class DTOsAvailableNumbersFilter
     }
 
     // Getters
-    public function getEventId(): int { return $this->event_id; }
-    public function getSearch(): ?string { return $this->search; }
-    public function getMinNumber(): ?int { return $this->min_number; }
-    public function getMaxNumber(): ?int { return $this->max_number; }
-    public function getPage(): int { return $this->page; }
-    public function getPerPage(): int { return $this->per_page; }
+    public function getEventId(): int
+    {
+        return $this->event_id;
+    }
+    public function getSearch(): ?string
+    {
+        return $this->search;
+    }
+    public function getMinNumber(): ?int
+    {
+        return $this->min_number;
+    }
+    public function getMaxNumber(): ?int
+    {
+        return $this->max_number;
+    }
+    public function getPage(): int
+    {
+        return $this->page;
+    }
+    public function getPerPage(): int
+    {
+        return $this->per_page;
+    }
 
     public function hasFilters(): bool
     {
         return !empty($this->search) ||
-               !empty($this->min_number) ||
-               !empty($this->max_number);
+            !empty($this->min_number) ||
+            !empty($this->max_number);
     }
 }

@@ -7,6 +7,20 @@ use App\Http\Requests\Purchase\AddTicketsToTransactionRequest;
 
 class DTOsAddTickets
 {
+    private static function formatTicketNumbers(?array $numbers): ?array
+    {
+        if (is_null($numbers) || empty($numbers)) {
+            return null;
+        }
+
+        return array_map(function ($number) {
+            if (is_string($number) && str_starts_with($number, 'RECHAZADO')) {
+                return $number;
+            }
+            return str_pad((int)$number, 4, '0', STR_PAD_LEFT);
+        }, $numbers);
+    }
+
     public function __construct(
         private readonly string $transaction_id,
         private readonly ?int $quantity = null,
@@ -25,7 +39,7 @@ class DTOsAddTickets
         return new self(
             transaction_id: $transactionId,
             quantity: $validated['quantity'] ?? null,
-            ticket_numbers: $validated['ticket_numbers'] ?? null,
+            ticket_numbers: self::formatTicketNumbers($validated['ticket_numbers'] ?? null),
         );
     }
 
