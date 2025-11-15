@@ -30,6 +30,7 @@ class NewPurchaseNotification extends Notification
             'transaction_id' => $this->purchaseData['transaction_id'],
             'quantity' => $this->purchaseData['quantity'],
             'total_amount' => $this->purchaseData['total_amount'],
+            'client_fullname' => $this->purchaseData['client_fullname'] ?? null, // ✅ NUEVO
             'client_email' => $this->purchaseData['client_email'],
             'client_whatsapp' => $this->purchaseData['client_whatsapp'],
             'event_id' => $this->purchaseData['event_id'],
@@ -37,12 +38,15 @@ class NewPurchaseNotification extends Notification
             'status' => 'pending',
         ];
 
+        // Construir el nombre del cliente para el mensaje
+        $clientName = $this->purchaseData['client_fullname'] ?? 'Cliente';
+
         if ($this->purchaseType === 'single') {
             $baseData['ticket_numbers'] = $this->purchaseData['ticket_numbers'];
-            $baseData['message'] = "Nueva compra individual: {$this->purchaseData['quantity']} ticket(s) - Números: " .
+            $baseData['message'] = "Nueva compra de {$clientName}: {$this->purchaseData['quantity']} ticket(s) - Números: " .
                 implode(', ', $this->purchaseData['ticket_numbers']);
         } else {
-            $baseData['message'] = "Nueva compra por cantidad: {$this->purchaseData['quantity']} ticket(s) sin números asignados";
+            $baseData['message'] = "Nueva compra de {$clientName}: {$this->purchaseData['quantity']} ticket(s) sin números asignados";
         }
 
         return $baseData;

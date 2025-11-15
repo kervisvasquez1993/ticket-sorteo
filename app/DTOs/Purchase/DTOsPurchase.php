@@ -373,7 +373,6 @@ class DTOsPurchase
         return $this->identificacion;
     }
 
-    // ✅ NUEVO GETTER
     public function getFullname(): string
     {
         return $this->fullname;

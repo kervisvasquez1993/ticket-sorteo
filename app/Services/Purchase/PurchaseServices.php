@@ -156,11 +156,12 @@ class PurchaseServices implements IPurchaseServices
 
             DB::commit();
 
-            // ✅ DESPACHAR JOB EN SEGUNDO PLANO (solo con datos del DTO)
+            // ✅ INCLUIR FULLNAME EN LOS DATOS
             SendPurchaseNotificationJob::dispatch([
                 'transaction_id' => $transactionId,
                 'quantity' => $data->getQuantity(),
                 'total_amount' => $totalAmount,
+                'client_fullname' => $data->getFullname(), // ✅ NUEVO
                 'client_email' => $data->getEmail(),
                 'client_whatsapp' => $data->getWhatsapp(),
                 'event_id' => $event->id,
@@ -240,17 +241,22 @@ class PurchaseServices implements IPurchaseServices
 
             DB::commit();
 
-            // ✅ DESPACHAR JOB EN SEGUNDO PLANO (solo con datos del DTO)
-            SendPurchaseNotificationJob::dispatch([
+            // ✅ TEMPORAL: Log para verificar que fullname se está enviando
+            $notificationData = [
                 'transaction_id' => $transactionId,
                 'ticket_numbers' => $ticketNumbers,
                 'quantity' => count($ticketNumbers),
                 'total_amount' => $eventPrice->amount * count($ticketNumbers),
+                'client_fullname' => $data->getFullname(),
                 'client_email' => $data->getEmail(),
                 'client_whatsapp' => $data->getWhatsapp(),
                 'event_id' => $event->id,
                 'event_name' => $event->name,
-            ], 'single');
+            ];
+
+            Log::info('📧 Datos de notificación a enviar:', $notificationData);
+
+            SendPurchaseNotificationJob::dispatch($notificationData, 'single');
 
             return [
                 'success' => true,

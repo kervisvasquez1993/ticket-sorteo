@@ -64,6 +64,7 @@ class SendPurchaseNotificationJob implements ShouldQueue
 
             Log::info('Notificaciones enviadas exitosamente', [
                 'transaction_id' => $this->purchaseData['transaction_id'],
+                'data' => $this->purchaseData,
                 'type' => $this->purchaseType,
                 'admin_count' => $administrators->count(),
                 'admin_emails' => $administrators->pluck('email')->toArray()
