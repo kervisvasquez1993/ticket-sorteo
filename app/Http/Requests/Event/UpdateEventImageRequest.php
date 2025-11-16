@@ -17,7 +17,7 @@ class UpdateEventImageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
         ];
     }
 
@@ -26,7 +26,7 @@ class UpdateEventImageRequest extends FormRequest
         return [
             'image.required' => 'La imagen es requerida',
             'image.image' => 'El archivo debe ser una imagen',
-            'image.mimes' => 'La imagen debe ser jpeg, png, jpg, gif o webp',
+            'image.mimes' => 'La imagen debe ser jpeg, png, jpg o webp',
             'image.max' => 'La imagen no debe superar 5MB',
         ];
     }

@@ -1,77 +1,153 @@
 <?php
 
-namespace App\Interfaces\Event;
+namespace App\Interfaces\Purchase;
 
-use App\DTOs\Event\DTOsEvent;
+use App\DTOs\Purchase\DTOsAddTickets;
+use App\DTOs\Purchase\DTOsAvailableNumbersFilter;
+use App\DTOs\Purchase\DTOsPurchase;
+use App\DTOs\Purchase\DTOsPurchaseFilter;
+use App\DTOs\Purchase\DTOsUpdatePurchaseQuantity;
 
-interface IEventServices
+interface IPurchaseServices
 {
     // ====================================================================
     // MÉTODOS BÁSICOS CRUD
     // ====================================================================
 
     /**
-     * Obtener todos los eventos
+     * Obtener todas las compras con filtros opcionales
      */
-    public function getAllEvents();
+    public function getAllPurchases(?DTOsPurchaseFilter $filters = null);
 
     /**
-     * Obtener evento por ID
+     * Obtener compra por ID
      */
-    public function getEventById($id);
+    public function getPurchaseById($id);
 
     /**
-     * Crear un evento
+     * Crear compra por cantidad (números aleatorios)
      */
-    public function createEvent(DTOsEvent $data);
+    public function createPurchase(DTOsPurchase $data);
 
     /**
-     * Actualizar evento (sin imagen)
+     * Actualizar compra
      */
-    public function updateEvent(DTOsEvent $data, $id);
+    public function updatePurchase(DTOsPurchase $data, $id);
 
     /**
-     * Eliminar evento
+     * Eliminar compra
      */
-    public function deleteEvent($id);
+    public function deletePurchase($id);
 
     // ====================================================================
-    // MÉTODOS DE GESTIÓN DE IMÁGENES
+    // MÉTODOS DE CREACIÓN DE COMPRAS
     // ====================================================================
 
     /**
-     * Actualizar solo la imagen del evento
-     *
-     * @param \Illuminate\Http\Request $request Request con archivo 'image'
-     * @param string $id ID del evento
-     * @return array ['success' => bool, 'data' => array|null, 'message' => string]
+     * Crear compra con números específicos
      */
-    public function updateEventImage($request, string $id): array;
+    public function createSinglePurchase(DTOsPurchase $data);
 
     /**
-     * Eliminar imagen del evento
-     *
-     * @param string $id ID del evento
-     * @return array ['success' => bool, 'data' => array|null, 'message' => string]
+     * Crear compra admin con números específicos
      */
-    public function deleteEventImage(string $id): array;
+    public function createAdminPurchase(DTOsPurchase $data, bool $autoApprove = false);
+
+    /**
+     * Crear compra admin con números aleatorios
+     */
+    public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true);
+
+    /**
+     * Crear compra masiva en segundo plano
+     */
+    public function createMassivePurchaseAsync(DTOsPurchase $data, bool $autoApprove = true): array;
+
+    // ====================================================================
+    // MÉTODOS DE APROBACIÓN Y RECHAZO
+    // ====================================================================
+
+    /**
+     * Aprobar compra (asigna números si no los tiene)
+     */
+    public function approvePurchase(string $transactionId);
+
+    /**
+     * Rechazar compra
+     */
+    public function rejectPurchase(string $transactionId);
 
     // ====================================================================
     // MÉTODOS DE CONSULTA
     // ====================================================================
 
     /**
-     * Obtener eventos activos
+     * Obtener compras de un usuario
      */
-    public function getActiveEvents();
+    public function getUserPurchases($userId);
 
     /**
-     * Obtener eventos por estado
+     * Obtener resumen de una transacción
      */
-    public function getEventsByStatus(string $status);
+    public function getPurchaseSummary($transactionId);
 
     /**
-     * Obtener estadísticas del evento
+     * Obtener compra por transaction_id
      */
-    public function getEventStatistics(int $eventId);
+    public function getPurchaseByTransaction(string $transactionId);
+
+    /**
+     * Obtener compras de un evento
+     */
+    public function getPurchasesByEvent(string $eventId);
+
+    /**
+     * Obtener compras por WhatsApp
+     */
+    public function getPurchasesByWhatsApp(string $whatsapp);
+
+    /**
+     * Obtener compras por identificación
+     */
+    public function getPurchasesByIdentificacion(string $identificacion);
+
+    /**
+     * Obtener estado de compra masiva en proceso
+     */
+    public function getMassivePurchaseStatus(string $transactionId): array;
+
+    // ====================================================================
+    // MÉTODOS DE GESTIÓN DE TICKETS
+    // ====================================================================
+
+    /**
+     * Verificar disponibilidad de un ticket
+     */
+    public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
+
+    /**
+     * Agregar tickets a una transacción existente
+     */
+    public function addTicketsToTransaction(DTOsAddTickets $dto): array;
+
+    /**
+     * Remover tickets de una transacción
+     */
+    public function removeTicketsFromTransaction(
+        string $transactionId,
+        array $ticketNumbersToRemove
+    ): array;
+
+    /**
+     * ✅ NUEVO: Editar cantidad de una compra pendiente (sin números asignados)
+     *
+     * Permite aumentar o disminuir la cantidad de tickets de una compra
+     * que aún no ha sido aprobada y no tiene números asignados.
+     *
+     * @param DTOsUpdatePurchaseQuantity $dto
+     * @return array [success, message, data]
+     */
+    public function updatePendingPurchaseQuantity(DTOsUpdatePurchaseQuantity $dto): array;
+    public function getTopBuyersByEvent(string $eventId, int $limit = 10, int $minTickets = 1);
+     public function getAvailableNumbers(DTOsAvailableNumbersFilter $filters): array;
 }
