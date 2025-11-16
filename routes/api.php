@@ -133,6 +133,8 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/events', [EventController::class, 'store']);
         Route::get('/events/{id}', [EventController::class, 'show']);
         Route::put('/events/{id}', [EventController::class, 'update']);
+        Route::post('/events/{id}/image', [EventController::class, 'updateImage']);
+
         Route::delete('/events/{id}', [EventController::class, 'destroy']);
         Route::post('/events/{id}/select-winner', [EventController::class, 'selectWinner']);
 

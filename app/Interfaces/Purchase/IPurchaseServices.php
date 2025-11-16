@@ -1,153 +1,77 @@
 <?php
 
-namespace App\Interfaces\Purchase;
+namespace App\Interfaces\Event;
 
-use App\DTOs\Purchase\DTOsAddTickets;
-use App\DTOs\Purchase\DTOsAvailableNumbersFilter;
-use App\DTOs\Purchase\DTOsPurchase;
-use App\DTOs\Purchase\DTOsPurchaseFilter;
-use App\DTOs\Purchase\DTOsUpdatePurchaseQuantity;
+use App\DTOs\Event\DTOsEvent;
 
-interface IPurchaseServices
+interface IEventServices
 {
     // ====================================================================
     // MÉTODOS BÁSICOS CRUD
     // ====================================================================
 
     /**
-     * Obtener todas las compras con filtros opcionales
+     * Obtener todos los eventos
      */
-    public function getAllPurchases(?DTOsPurchaseFilter $filters = null);
+    public function getAllEvents();
 
     /**
-     * Obtener compra por ID
+     * Obtener evento por ID
      */
-    public function getPurchaseById($id);
+    public function getEventById($id);
 
     /**
-     * Crear compra por cantidad (números aleatorios)
+     * Crear un evento
      */
-    public function createPurchase(DTOsPurchase $data);
+    public function createEvent(DTOsEvent $data);
 
     /**
-     * Actualizar compra
+     * Actualizar evento (sin imagen)
      */
-    public function updatePurchase(DTOsPurchase $data, $id);
+    public function updateEvent(DTOsEvent $data, $id);
 
     /**
-     * Eliminar compra
+     * Eliminar evento
      */
-    public function deletePurchase($id);
+    public function deleteEvent($id);
 
     // ====================================================================
-    // MÉTODOS DE CREACIÓN DE COMPRAS
-    // ====================================================================
-
-    /**
-     * Crear compra con números específicos
-     */
-    public function createSinglePurchase(DTOsPurchase $data);
-
-    /**
-     * Crear compra admin con números específicos
-     */
-    public function createAdminPurchase(DTOsPurchase $data, bool $autoApprove = false);
-
-    /**
-     * Crear compra admin con números aleatorios
-     */
-    public function createAdminRandomPurchase(DTOsPurchase $data, bool $autoApprove = true);
-
-    /**
-     * Crear compra masiva en segundo plano
-     */
-    public function createMassivePurchaseAsync(DTOsPurchase $data, bool $autoApprove = true): array;
-
-    // ====================================================================
-    // MÉTODOS DE APROBACIÓN Y RECHAZO
+    // MÉTODOS DE GESTIÓN DE IMÁGENES
     // ====================================================================
 
     /**
-     * Aprobar compra (asigna números si no los tiene)
+     * Actualizar solo la imagen del evento
+     *
+     * @param \Illuminate\Http\Request $request Request con archivo 'image'
+     * @param string $id ID del evento
+     * @return array ['success' => bool, 'data' => array|null, 'message' => string]
      */
-    public function approvePurchase(string $transactionId);
+    public function updateEventImage($request, string $id): array;
 
     /**
-     * Rechazar compra
+     * Eliminar imagen del evento
+     *
+     * @param string $id ID del evento
+     * @return array ['success' => bool, 'data' => array|null, 'message' => string]
      */
-    public function rejectPurchase(string $transactionId);
+    public function deleteEventImage(string $id): array;
 
     // ====================================================================
     // MÉTODOS DE CONSULTA
     // ====================================================================
 
     /**
-     * Obtener compras de un usuario
+     * Obtener eventos activos
      */
-    public function getUserPurchases($userId);
+    public function getActiveEvents();
 
     /**
-     * Obtener resumen de una transacción
+     * Obtener eventos por estado
      */
-    public function getPurchaseSummary($transactionId);
+    public function getEventsByStatus(string $status);
 
     /**
-     * Obtener compra por transaction_id
+     * Obtener estadísticas del evento
      */
-    public function getPurchaseByTransaction(string $transactionId);
-
-    /**
-     * Obtener compras de un evento
-     */
-    public function getPurchasesByEvent(string $eventId);
-
-    /**
-     * Obtener compras por WhatsApp
-     */
-    public function getPurchasesByWhatsApp(string $whatsapp);
-
-    /**
-     * Obtener compras por identificación
-     */
-    public function getPurchasesByIdentificacion(string $identificacion);
-
-    /**
-     * Obtener estado de compra masiva en proceso
-     */
-    public function getMassivePurchaseStatus(string $transactionId): array;
-
-    // ====================================================================
-    // MÉTODOS DE GESTIÓN DE TICKETS
-    // ====================================================================
-
-    /**
-     * Verificar disponibilidad de un ticket
-     */
-    public function checkTicketAvailability(int $eventId, string $ticketNumber): array;
-
-    /**
-     * Agregar tickets a una transacción existente
-     */
-    public function addTicketsToTransaction(DTOsAddTickets $dto): array;
-
-    /**
-     * Remover tickets de una transacción
-     */
-    public function removeTicketsFromTransaction(
-        string $transactionId,
-        array $ticketNumbersToRemove
-    ): array;
-
-    /**
-     * ✅ NUEVO: Editar cantidad de una compra pendiente (sin números asignados)
-     *
-     * Permite aumentar o disminuir la cantidad de tickets de una compra
-     * que aún no ha sido aprobada y no tiene números asignados.
-     *
-     * @param DTOsUpdatePurchaseQuantity $dto
-     * @return array [success, message, data]
-     */
-    public function updatePendingPurchaseQuantity(DTOsUpdatePurchaseQuantity $dto): array;
-    public function getTopBuyersByEvent(string $eventId, int $limit = 10, int $minTickets = 1);
-     public function getAvailableNumbers(DTOsAvailableNumbersFilter $filters): array;
+    public function getEventStatistics(int $eventId);
 }

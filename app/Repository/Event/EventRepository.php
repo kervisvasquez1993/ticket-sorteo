@@ -21,7 +21,7 @@ class EventRepository implements IEventRepository
             'events.end_date',
             'events.status',
             'events.winner_number',
-            'events.image_url', // Nuevo campo agregado
+            'events.image_url',
             'events.created_at',
             'events.updated_at'
         ])
@@ -44,28 +44,23 @@ class EventRepository implements IEventRepository
                 }
             ])
             ->addSelect([
-                // Suma total de ingresos por estado
                 'total_revenue' => function ($query) {
                     $query->selectRaw('COALESCE(SUM(total_amount), 0)')
                         ->from('purchases')
                         ->whereColumn('purchases.event_id', 'events.id');
                 },
-
                 'pending_revenue' => function ($query) {
                     $query->selectRaw('COALESCE(SUM(total_amount), 0)')
                         ->from('purchases')
                         ->whereColumn('purchases.event_id', 'events.id')
                         ->where('purchases.status', 'pending');
                 },
-
                 'completed_revenue' => function ($query) {
                     $query->selectRaw('COALESCE(SUM(total_amount), 0)')
                         ->from('purchases')
                         ->whereColumn('purchases.event_id', 'events.id')
                         ->where('purchases.status', 'completed');
                 },
-
-                // Cantidad total de tickets vendidos
                 'total_tickets_sold' => function ($query) {
                     $query->selectRaw('COALESCE(SUM(quantity), 0)')
                         ->from('purchases')
@@ -78,6 +73,7 @@ class EventRepository implements IEventRepository
                 $totalTickets = $event->end_number - $event->start_number + 1;
                 $ticketsSold = intval($event->total_tickets_sold ?? 0);
                 $percentageSold = $totalTickets > 0 ? round(($ticketsSold / $totalTickets) * 100, 2) : 0;
+
                 $event->statistics = [
                     'total_purchases' => $event->total_purchases,
                     'purchases_by_status' => [
@@ -99,6 +95,7 @@ class EventRepository implements IEventRepository
                         'percentage_sold' => $percentageSold
                     ]
                 ];
+
                 unset(
                     $event->total_purchases,
                     $event->pending_purchases,
@@ -128,7 +125,7 @@ class EventRepository implements IEventRepository
             'end_date',
             'status',
             'winner_number',
-            'image_url', // Nuevo campo agregado
+            'image_url',
             'created_at',
             'updated_at'
         ])
@@ -152,7 +149,6 @@ class EventRepository implements IEventRepository
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($event) {
-                // Calcular estadísticas a partir de las compras cargadas
                 $purchases = $event->purchases;
 
                 $event->statistics = [
@@ -181,7 +177,6 @@ class EventRepository implements IEventRepository
             ->where('end_date', '>=', now())
             ->addSelect([
                 'events.*',
-                // Cantidad total de tickets vendidos
                 'total_tickets_sold' => function ($query) {
                     $query->selectRaw('COALESCE(SUM(quantity), 0)')
                         ->from('purchases')
@@ -202,39 +197,31 @@ class EventRepository implements IEventRepository
                     'percentage_sold' => $percentageSold
                 ];
 
-                // Limpiar el campo temporal
                 unset($event->total_tickets_sold);
 
                 return $event;
             });
     }
 
-
     public function getEventById($id): Event
     {
-        $event = Event::findOrFail($id);
-        return $event;
+        return Event::findOrFail($id);
     }
 
     public function getEventWithParticipants($id): Event
     {
-        $event = Event::with([
-            // Purchases con toda la información relacionada
+        return Event::with([
             'purchases' => function ($query) {
                 $query->where('status', 'completed')
                     ->orderBy('created_at', 'desc');
             },
-            'purchases.user:id,name,email,role', // Solo campos necesarios del usuario
+            'purchases.user:id,name,email,role',
             'purchases.eventPrice:id,event_id,amount,currency,is_default',
-            'purchases.paymentMethod:id,name,type', // Asumiendo que tienes estos campos
-
-            // Precios del evento
+            'purchases.paymentMethod:id,name,type',
             'prices' => function ($query) {
                 $query->where('is_active', true);
             },
             'defaultPrice',
-
-            // Participantes únicos (si necesitas listarlos aparte)
             'participants' => function ($query) {
                 $query->select('users.id', 'users.name', 'users.email')
                     ->distinct();
@@ -249,25 +236,43 @@ class EventRepository implements IEventRepository
                 }
             ])
             ->findOrFail($id);
-
-        return $event;
     }
-
-
-
 
     public function createEvent(DTOsEvent $data): Event
     {
         return DB::transaction(function () use ($data) {
-            $event = Event::create($data->toArray());
-            return $event;
+            return Event::create($data->toArray());
         });
     }
 
     public function updateEvent(DTOsEvent $data, Event $event): Event
     {
-        $event->update($data->toArray());
-        return $event;
+        // Filtrar solo los campos que no son null o vacíos
+        $updateData = array_filter($data->toArray(), function ($value) {
+            return $value !== null && $value !== '' && $value !== 0;
+        });
+
+        // Si no hay datos para actualizar, retornar el evento sin cambios
+        if (empty($updateData)) {
+            return $event;
+        }
+
+        $event->update($updateData);
+        return $event->fresh();
+    }
+
+
+
+    public function updateEventImage(Event $event, string $imageUrl): Event
+    {
+        $event->update(['image_url' => $imageUrl]);
+        return $event->fresh();
+    }
+
+    public function removeEventImage(Event $event): Event
+    {
+        $event->update(['image_url' => null]);
+        return $event->fresh();
     }
 
     public function deleteEvent(Event $event): Event
@@ -276,39 +281,77 @@ class EventRepository implements IEventRepository
         return $event;
     }
 
+    // ====================================================================
+    // ✅ MÉTODOS FALTANTES AGREGADOS
+    // ====================================================================
+
+    /**
+     * Obtener eventos por estado
+     */
+    public function getEventsByStatus(string $status)
+    {
+        return Event::where('status', $status)
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+
+    /**
+     * Obtener eventos con paginación
+     */
+    public function getPaginatedEvents(int $perPage = 15)
+    {
+        return Event::orderBy('created_at', 'desc')
+            ->paginate($perPage);
+    }
+
+    /**
+     * Verificar si un evento tiene compras
+     */
+    public function hasEventPurchases(int $eventId): bool
+    {
+        return Event::where('id', $eventId)
+            ->has('purchases')
+            ->exists();
+    }
+
+    /**
+     * Obtener estadísticas del evento
+     */
+    public function getEventStatistics(int $eventId): array
+    {
+        $event = $this->getEventById($eventId);
+        return $event->getStatistics();
+    }
+
+    // ====================================================================
+    // MÉTODOS DE NÚMEROS Y GANADORES
+    // ====================================================================
+
     public function getAvailableNumbers(Event $event): array
     {
-        // Obtener todos los números usados en UNA consulta
         $usedNumbers = $event->purchases()
             ->where('status', 'completed')
             ->pluck('ticket_number')
             ->toArray();
 
-        // Crear rango completo
         $allNumbers = range($event->start_number, $event->end_number);
-
-        // Excluir los usados
         $availableNumbers = array_diff($allNumbers, $usedNumbers);
 
         return array_values($availableNumbers);
     }
 
-
     public function selectWinner(Event $event, int $winnerNumber): object
     {
-        // Buscar la compra con el número ganador (puede no existir)
         $winningPurchase = $event->purchases()
             ->where('ticket_number', $winnerNumber)
-            ->with('user') // Puede ser null para guests
+            ->with('user')
             ->first();
 
-        // Actualizar el evento con el número ganador
         $event->update([
             'winner_number' => $winnerNumber,
             'status' => 'completed'
         ]);
 
-        // Si existe una compra asociada al número
         if ($winningPurchase) {
             return (object)[
                 'winner_number' => $winnerNumber,
@@ -330,7 +373,6 @@ class EventRepository implements IEventRepository
             ];
         }
 
-        // Si NO existe compra para ese número (número sin comprador)
         return (object)[
             'winner_number' => $winnerNumber,
             'has_purchase' => false,
@@ -351,22 +393,17 @@ class EventRepository implements IEventRepository
         ];
     }
 
-    /**
-     * ✅ NUEVO: Obtener detalles completos del ganador
-     */
     public function getWinnerDetails(Event $event): ?array
     {
         if (!$event->winner_number) {
             return null;
         }
 
-        // Buscar la compra con el número ganador
         $winningPurchase = $event->purchases()
             ->where('ticket_number', $event->winner_number)
             ->with('user')
             ->first();
 
-        // Si existe una compra asociada al número
         if ($winningPurchase) {
             return [
                 'winner_number' => $event->winner_number,
@@ -385,7 +422,6 @@ class EventRepository implements IEventRepository
             ];
         }
 
-        // Si NO existe compra para ese número (número sin comprador)
         return [
             'winner_number' => $event->winner_number,
             'has_purchase' => false,

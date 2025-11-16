@@ -7,6 +7,7 @@ use App\Interfaces\Event\IEventServices;
 use App\Interfaces\Event\IEventRepository;
 use Exception;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class EventServices implements IEventServices
 {
@@ -69,24 +70,19 @@ class EventServices implements IEventServices
     {
         try {
             $event = $this->eventRepository->getEventById($id);
-
-            // Obtener estadísticas básicas
             $statistics = $event->getStatistics();
 
-            // Contar participantes únicos (usuarios registrados)
             $totalParticipants = $event->purchases()
                 ->where('status', 'completed')
                 ->whereNotNull('user_id')
                 ->distinct('user_id')
                 ->count('user_id');
 
-            // Contar compras de invitados (sin user_id)
             $guestPurchases = $event->purchases()
                 ->where('status', 'completed')
                 ->whereNull('user_id')
                 ->count();
 
-            // Análisis por moneda
             $revenueByurrency = $event->purchases()
                 ->where('status', 'completed')
                 ->select('currency')
@@ -102,7 +98,6 @@ class EventServices implements IEventServices
                     ];
                 });
 
-            // Resumen de ventas por estado
             $purchasesSummary = $event->purchases()
                 ->select('status')
                 ->selectRaw('COUNT(*) as count')
@@ -112,7 +107,6 @@ class EventServices implements IEventServices
                 ->get()
                 ->keyBy('status');
 
-            // ✅ NUEVO: Obtener información del ganador si existe
             $winnerInfo = null;
             if ($event->winner_number) {
                 $winnerInfo = $this->eventRepository->getWinnerDetails($event);
@@ -175,7 +169,6 @@ class EventServices implements IEventServices
                         'available_numbers' => $event->getAvailableNumbersCount(),
                         'sold_numbers' => (($event->end_number - $event->start_number) + 1) - $event->getAvailableNumbersCount(),
                     ],
-                    // ✅ NUEVO: Información del ganador
                     'winner_details' => $winnerInfo,
                 ]
             ];
@@ -187,6 +180,7 @@ class EventServices implements IEventServices
             ];
         }
     }
+
     public function createEvent(DTOsEvent $data)
     {
         try {
@@ -215,17 +209,24 @@ class EventServices implements IEventServices
         try {
             $event = $this->eventRepository->getEventById($id);
 
-            // Validar que no se modifiquen rangos si ya hay compras
+            // ✅ Validar rangos solo si vienen en el request
             $hasPurchases = $event->purchases()->exists();
-            if (
-                $hasPurchases &&
-                ($data->getStartNumber() != $event->start_number ||
-                    $data->getEndNumber() != $event->end_number)
-            ) {
-                throw new Exception('No se pueden modificar los rangos de números si ya hay compras registradas');
+            $newStartNumber = $data->getStartNumber();
+            $newEndNumber = $data->getEndNumber();
+
+            if ($hasPurchases) {
+                // Solo validar si se están intentando cambiar
+                if ($newStartNumber !== null && $newStartNumber != $event->start_number) {
+                    throw new Exception('No se pueden modificar el número inicial si ya hay compras registradas');
+                }
+
+                if ($newEndNumber !== null && $newEndNumber != $event->end_number) {
+                    throw new Exception('No se pueden modificar el número final si ya hay compras registradas');
+                }
             }
 
             $results = $this->eventRepository->updateEvent($data, $event);
+
             return [
                 'success' => true,
                 'data' => $results,
@@ -238,14 +239,21 @@ class EventServices implements IEventServices
             ];
         }
     }
-
     public function deleteEvent($id)
     {
         try {
             $event = $this->eventRepository->getEventById($id);
 
+            if ($event->purchases()->exists()) {
+                throw new Exception('No se puede eliminar un evento que tiene compras registradas');
+            }
+
+            if ($event->image_url) {
+                $this->deleteEventImageFromS3($event->image_url);
+            }
 
             $results = $this->eventRepository->deleteEvent($event);
+
             return [
                 'success' => true,
                 'data' => $results,
@@ -258,6 +266,119 @@ class EventServices implements IEventServices
             ];
         }
     }
+
+    // ====================================================================
+    // ✅ MÉTODOS DE GESTIÓN DE IMÁGENES
+    // ====================================================================
+
+    public function updateEventImage($request, string $id): array
+    {
+        try {
+            $event = $this->eventRepository->getEventById($id);
+
+            if ($event->image_url) {
+                $this->deleteEventImageFromS3($event->image_url);
+            }
+
+            $imageUrl = $this->uploadEventImageToS3($request);
+
+            if (!$imageUrl) {
+                throw new Exception('Error al subir la imagen a S3');
+            }
+
+            $updatedEvent = $this->eventRepository->updateEventImage($event, $imageUrl);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'id' => $updatedEvent->id,
+                    'image_url' => $updatedEvent->image_url,
+                ],
+                'message' => 'Imagen del evento actualizada exitosamente'
+            ];
+        } catch (Exception $exception) {
+            Log::error('Error updating event image', [
+                'event_id' => $id,
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    public function deleteEventImage(string $id): array
+    {
+        try {
+            $event = $this->eventRepository->getEventById($id);
+
+            if (!$event->image_url) {
+                throw new Exception('El evento no tiene imagen para eliminar');
+            }
+
+            $this->deleteEventImageFromS3($event->image_url);
+            $updatedEvent = $this->eventRepository->removeEventImage($event);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'id' => $updatedEvent->id,
+                    'image_url' => null,
+                ],
+                'message' => 'Imagen del evento eliminada exitosamente'
+            ];
+        } catch (Exception $exception) {
+            Log::error('Error deleting event image', [
+                'event_id' => $id,
+                'error' => $exception->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    // ====================================================================
+    // ✅ MÉTODOS FALTANTES AGREGADOS
+    // ====================================================================
+
+    public function getEventsByStatus(string $status)
+    {
+        try {
+            return [
+                'success' => true,
+                'data' => $this->eventRepository->getEventsByStatus($status)
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    public function getEventStatistics(int $eventId)
+    {
+        try {
+            return [
+                'success' => true,
+                'data' => $this->eventRepository->getEventStatistics($eventId)
+            ];
+        } catch (Exception $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage()
+            ];
+        }
+    }
+
+    // ====================================================================
+    // MÉTODOS DE NÚMEROS Y GANADORES
+    // ====================================================================
 
     public function getAvailableNumbers($eventId)
     {
@@ -285,39 +406,11 @@ class EventServices implements IEventServices
         }
     }
 
-    // public function selectWinner($eventId)
-    // {
-    //     try {
-    //         $event = $this->eventRepository->getEventById($eventId);
-
-    //         if ($event->status === 'completed') {
-    //             throw new Exception('Este evento ya tiene un ganador');
-    //         }
-
-    //         $winner = $this->eventRepository->selectWinner($event);
-
-    //         if (!$winner) {
-    //             throw new Exception('No hay participantes para este evento');
-    //         }
-
-    //         return [
-    //             'success' => true,
-    //             'data' => $winner,
-    //             'message' => 'Ganador seleccionado exitosamente'
-    //         ];
-    //     } catch (Exception $exception) {
-    //         return [
-    //             'success' => false,
-    //             'message' => $exception->getMessage()
-    //         ];
-    //     }
-    // }
     public function selectWinner($eventId, int $winnerNumber)
     {
         try {
             $event = $this->eventRepository->getEventById($eventId);
 
-            // Validar estado del evento
             if ($event->status === 'completed') {
                 throw new Exception('Este evento ya tiene un ganador');
             }
@@ -326,16 +419,12 @@ class EventServices implements IEventServices
                 throw new Exception('El evento debe estar activo para seleccionar un ganador');
             }
 
-            // Validar que el número esté en el rango permitido
             if ($winnerNumber < $event->start_number || $winnerNumber > $event->end_number) {
                 throw new Exception(
                     "El número ganador debe estar entre {$event->start_number} y {$event->end_number}"
                 );
             }
 
-            // ✅ REMOVIDA LA VALIDACIÓN - Ahora permite números sin compra o con compra failed
-
-            // Seleccionar ganador
             $winner = $this->eventRepository->selectWinner($event, $winnerNumber);
 
             return [
@@ -348,6 +437,66 @@ class EventServices implements IEventServices
                 'success' => false,
                 'message' => $exception->getMessage()
             ];
+        }
+    }
+
+    // ====================================================================
+    // MÉTODOS PRIVADOS DE GESTIÓN DE S3
+    // ====================================================================
+
+    private function uploadEventImageToS3($request): ?string
+    {
+        if (!$request->hasFile('image')) {
+            return null;
+        }
+
+        try {
+            $file = $request->file('image');
+            $fileName = 'event-images/' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            $uploaded = Storage::disk('s3')->put($fileName, file_get_contents($file), [
+                'visibility' => 'public',
+                'ContentType' => $file->getMimeType()
+            ]);
+
+            if ($uploaded) {
+                $url = "https://backend-imagen-br.s3.us-east-2.amazonaws.com/" . $fileName;
+
+                Log::info('Event image uploaded successfully', [
+                    'file_name' => $fileName,
+                    'url' => $url
+                ]);
+
+                return $url;
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Error uploading event image', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    private function deleteEventImageFromS3(?string $imageUrl): void
+    {
+        if (!$imageUrl) {
+            return;
+        }
+
+        try {
+            $path = str_replace(
+                'https://backend-imagen-br.s3.us-east-2.amazonaws.com/',
+                '',
+                $imageUrl
+            );
+
+            Storage::disk('s3')->delete($path);
+            Log::info('Event image deleted from S3', ['path' => $path]);
+        } catch (\Exception $e) {
+            Log::error('Error deleting event image from S3', [
+                'url' => $imageUrl,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 }

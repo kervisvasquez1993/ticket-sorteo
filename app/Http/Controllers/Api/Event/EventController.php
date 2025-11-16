@@ -6,6 +6,7 @@ use App\DTOs\Event\DTOsEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Event\CreateEventRequest;
 use App\Http\Requests\Event\SelectWinnerRequest;
+use App\Http\Requests\Event\UpdateEventImageRequest;
 use App\Http\Requests\Event\UpdateEventRequest;
 use App\Interfaces\Event\IEventServices;
 use App\Models\Event;
@@ -66,7 +67,6 @@ class EventController extends Controller
      */
     public function show(string $id)
     {
-        // Admin ve con participantes, clientes solo info básica
         if (auth()->user()->isAdmin()) {
             $result = $this->eventServices->getEventWithParticipants($id);
         } else {
@@ -256,5 +256,29 @@ class EventController extends Controller
                 'error' => $e->getMessage()
             ], 422);
         }
+    }
+    public function updateImage(UpdateEventImageRequest $request, string $id)
+    {
+        $result = $this->eventServices->updateEventImage($request, $id);
+
+        if (!$result['success']) {
+            return response()->json(['error' => $result['message']], 422);
+        }
+
+        return response()->json($result, 200);
+    }
+
+    /**
+     * Eliminar imagen del evento
+     */
+    public function deleteImage(string $id)
+    {
+        $result = $this->eventServices->deleteEventImage($id);
+
+        if (!$result['success']) {
+            return response()->json(['error' => $result['message']], 422);
+        }
+
+        return response()->json($result, 200);
     }
 }
