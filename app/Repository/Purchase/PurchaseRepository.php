@@ -164,8 +164,15 @@ class PurchaseRepository implements IPurchaseRepository
     {
         return Purchase::where('event_id', $eventId)
             ->whereNotNull('ticket_number')
-            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%') // ✅ Excluir rechazados
+            ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
             ->pluck('ticket_number')
+            ->map(function ($number) {
+                // ✅ Asegurar formato consistente
+                if (is_string($number) && str_starts_with($number, 'RECHAZADO')) {
+                    return $number;
+                }
+                return str_pad((int)$number, 4, '0', STR_PAD_LEFT);
+            })
             ->toArray();
     }
 
