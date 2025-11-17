@@ -73,7 +73,7 @@ class CreateSinglePurchaseRequest extends FormRequest
                 'required',
                 'array',
                 'min:1',
-                'max:10',
+                'max:100',
                 function ($attribute, $value, $fail) {
                     if (!is_array($value)) {
                         return;
@@ -228,7 +228,7 @@ class CreateSinglePurchaseRequest extends FormRequest
             'ticket_numbers.required' => 'Debes seleccionar al menos un número de ticket.',
             'ticket_numbers.array' => 'Los números de ticket deben ser un array válido.',
             'ticket_numbers.min' => 'Debes seleccionar al menos un número de ticket.',
-            'ticket_numbers.max' => 'No puedes seleccionar más de 10 números a la vez.',
+            'ticket_numbers.max' => 'No puedes seleccionar más de 100 números a la vez.',
             'ticket_numbers.*.required' => 'Todos los números de ticket son obligatorios.',
             'ticket_numbers.*.integer' => 'Cada número de ticket debe ser un número entero.',
             'currency.required' => 'La moneda es obligatoria.',
