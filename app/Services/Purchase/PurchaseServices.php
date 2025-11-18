@@ -404,12 +404,29 @@ class PurchaseServices implements IPurchaseServices
             if ($purchasesWithNumbers->isNotEmpty()) {
                 /** @var \App\Models\Purchase $purchase */
                 foreach ($purchasesWithNumbers as $purchase) {
+                    // ✅ FORMATEAR ANTES DE ASIGNAR
+                    $formattedNumber = \App\Models\Purchase::formatTicketNumber($purchase->ticket_number);
+
+                    // ✅ VERIFICAR SI EL NÚMERO YA ESTÁ USADO POR OTRA COMPRA
+                    $existingPurchase = \App\Models\Purchase::where('event_id', $event->id)
+                        ->where('ticket_number', $formattedNumber)
+                        ->where('id', '!=', $purchase->id) // ⚠️ Excluir la compra actual
+                        ->where('status', '!=', 'failed')
+                        ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
+                        ->first();
+
+                    if ($existingPurchase) {
+                        throw new Exception(
+                            "El número {$formattedNumber} ya está asignado a otra compra (ID: {$existingPurchase->id}, Transaction: {$existingPurchase->transaction_id})"
+                        );
+                    }
+
                     $this->PurchaseRepository->assignTicketNumber(
                         $purchase->id,
-                        $purchase->ticket_number,
+                        $formattedNumber,
                         'completed'
                     );
-                    $assignedNumbers[] = $purchase->ticket_number;
+                    $assignedNumbers[] = $formattedNumber;
                 }
 
                 Log::info('✅ Compra con números específicos aprobada', [
@@ -422,8 +439,16 @@ class PurchaseServices implements IPurchaseServices
             // CASO 2: SI NO TIENEN NÚMEROS → Asignar números aleatorios
             // ========================================================================
             if ($purchasesWithoutNumbers->isNotEmpty()) {
+                // ✅ OBTENER NÚMEROS USADOS (YA FORMATEADOS)
                 $usedNumbers = $this->PurchaseRepository->getUsedTicketNumbers($event->id);
-                $allNumbers = range($event->start_number, $event->end_number);
+
+                // ✅ GENERAR RANGO COMPLETO CON FORMATO
+                $allNumbers = [];
+                for ($i = $event->start_number; $i <= $event->end_number; $i++) {
+                    $allNumbers[] = str_pad($i, 4, '0', STR_PAD_LEFT);
+                }
+
+                // ✅ OBTENER DISPONIBLES (ambos arrays están formateados)
                 $availableNumbers = array_diff($allNumbers, $usedNumbers);
 
                 if (count($availableNumbers) < $purchasesWithoutNumbers->count()) {
@@ -456,7 +481,8 @@ class PurchaseServices implements IPurchaseServices
 
             DB::commit();
 
-            $firstPurchase = $purchases->first();
+            // ✅ REFRESCAR DATOS DESPUÉS DEL COMMIT
+            $firstPurchase = $this->PurchaseRepository->getPurchaseById($purchases->first()->id);
 
             // ✅ ENVIAR NOTIFICACIONES (Email y WhatsApp)
             $emailSent = false;
@@ -466,28 +492,44 @@ class PurchaseServices implements IPurchaseServices
 
             // Intentar enviar email si está disponible
             if (!empty($firstPurchase->email)) {
-                $emailSent = $this->emailNotification->sendApprovalNotification(
-                    $firstPurchase->email,
-                    $transactionId,
-                    $assignedNumbers,
-                    $purchases->count(),
-                    $event->name
-                );
-                $emailStatus = $emailSent ? 'sent_successfully' : 'failed_to_send';
+                try {
+                    $emailSent = $this->emailNotification->sendApprovalNotification(
+                        $firstPurchase->email,
+                        $transactionId,
+                        $assignedNumbers,
+                        $purchases->count(),
+                        $event->name
+                    );
+                    $emailStatus = $emailSent ? 'sent_successfully' : 'failed_to_send';
+                } catch (\Exception $e) {
+                    Log::error('Error enviando email de aprobación', [
+                        'transaction_id' => $transactionId,
+                        'error' => $e->getMessage()
+                    ]);
+                    $emailStatus = 'error_sending';
+                }
             } else {
                 $emailStatus = 'no_email_provided';
             }
 
-            // ✅ Intentar enviar WhatsApp si está disponible (AHORA CON NOMBRE)
+            // ✅ Intentar enviar WhatsApp si está disponible
             if (!empty($firstPurchase->whatsapp)) {
-                $whatsappSent = $this->whatsappNotification->sendApprovalNotification(
-                    $firstPurchase->whatsapp,
-                    $transactionId,
-                    $assignedNumbers,
-                    $purchases->count(),
-                    $firstPurchase->fullname
-                );
-                $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
+                try {
+                    $whatsappSent = $this->whatsappNotification->sendApprovalNotification(
+                        $firstPurchase->whatsapp,
+                        $transactionId,
+                        $assignedNumbers,
+                        $purchases->count(),
+                        $firstPurchase->fullname
+                    );
+                    $whatsappStatus = $whatsappSent ? 'sent_successfully' : 'failed_to_send';
+                } catch (\Exception $e) {
+                    Log::error('Error enviando WhatsApp de aprobación', [
+                        'transaction_id' => $transactionId,
+                        'error' => $e->getMessage()
+                    ]);
+                    $whatsappStatus = 'error_sending';
+                }
             } else {
                 $whatsappStatus = 'no_whatsapp_provided';
             }
@@ -517,13 +559,25 @@ class PurchaseServices implements IPurchaseServices
             ];
         } catch (Exception $exception) {
             DB::rollBack();
-            Log::error('Error approving purchase: ' . $exception->getMessage());
+            Log::error('❌ Error approving purchase', [
+                'transaction_id' => $transactionId,
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString()
+            ]);
 
-            $this->PurchaseRepository->updateStatusByTransactionAndConditions(
-                $transactionId,
-                'failed',
-                'processing'
-            );
+            // ✅ INTENTAR actualizar status a failed (pero capturar cualquier error)
+            try {
+                $this->PurchaseRepository->updateStatusByTransactionAndConditions(
+                    $transactionId,
+                    'failed',
+                    'pending'
+                );
+            } catch (\Exception $e) {
+                Log::error('❌ Error adicional al marcar como failed', [
+                    'transaction_id' => $transactionId,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
             return [
                 'success' => false,

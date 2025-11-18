@@ -165,14 +165,21 @@ class PurchaseRepository implements IPurchaseRepository
         return Purchase::where('event_id', $eventId)
             ->whereNotNull('ticket_number')
             ->where('ticket_number', 'NOT LIKE', 'RECHAZADO%')
+            ->where('status', '!=', 'failed') // ✅ AGREGAR: excluir failed
             ->pluck('ticket_number')
             ->map(function ($number) {
-                // ✅ Asegurar formato consistente
+                // ✅ Si ya viene formateado desde BD, devolverlo tal cual
+                if (is_string($number) && strlen($number) === 4 && $number[0] === '0') {
+                    return $number;
+                }
+                // ✅ Si no, formatear
                 if (is_string($number) && str_starts_with($number, 'RECHAZADO')) {
                     return $number;
                 }
                 return str_pad((int)$number, 4, '0', STR_PAD_LEFT);
             })
+            ->unique() // ✅ AGREGAR: eliminar duplicados
+            ->values()
             ->toArray();
     }
 
