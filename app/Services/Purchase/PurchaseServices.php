@@ -1645,14 +1645,11 @@ class PurchaseServices implements IPurchaseServices
         }
     }
 
-    /**
-     * ✨ ACTUALIZADO: Obtener top de compradores por evento con filtro de moneda
-     */
     public function getTopBuyersByEvent(
         string $eventId,
         int $limit = 10,
         int $minTickets = 1,
-        ?string $currency = null // ⚠️ Ya no se usa pero se mantiene por compatibilidad
+        ?string $currency = null
     ): array {
         try {
             $event = Event::findOrFail($eventId);

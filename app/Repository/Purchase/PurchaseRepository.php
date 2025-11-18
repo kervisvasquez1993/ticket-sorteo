@@ -1431,10 +1431,9 @@ class PurchaseRepository implements IPurchaseRepository
         ?string $currency = null
     ): array {
         $query = Purchase::select(
-            // ✨ Usar identificación normalizada para agrupar
             'purchases.identificacion',
-            'purchases.fullname',
-            'purchases.user_id',
+            // ✅ Tomar cualquier fullname (el primero que encuentre)
+            DB::raw('MAX(purchases.fullname) as fullname'),
             DB::raw('COUNT(CASE
             WHEN purchases.status = \'completed\'
             AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
@@ -1464,10 +1463,9 @@ class PurchaseRepository implements IPurchaseRepository
                 $query->whereNull('users.id')
                     ->orWhere('users.role', '!=', 'admin');
             })
-            ->where('purchases.identificacion', 'NOT LIKE', '%25672732%');
-
-        // ✨ AGRUPAR por identificación normalizada
-        $query->groupBy('purchases.identificacion', 'purchases.fullname', 'purchases.user_id')
+            ->where('purchases.identificacion', 'NOT LIKE', '%25672732%')
+            // ✅ SOLO agrupar por identificacion
+            ->groupBy('purchases.identificacion')
             ->havingRaw(
                 'COUNT(CASE
                 WHEN purchases.status = ?
