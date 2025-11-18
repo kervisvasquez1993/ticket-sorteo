@@ -1431,16 +1431,15 @@ class PurchaseRepository implements IPurchaseRepository
         ?string $currency = null
     ): array {
         $query = Purchase::select(
+            // ✨ Usar identificación normalizada para agrupar
             'purchases.identificacion',
             'purchases.fullname',
             'purchases.user_id',
-            // ✨ Contar tickets totales (todas las monedas)
             DB::raw('COUNT(CASE
             WHEN purchases.status = \'completed\'
             AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
             THEN 1
         END) as total_tickets'),
-            // ✨ Sumar montos en VES
             DB::raw('SUM(CASE
             WHEN purchases.status = \'completed\'
             AND purchases.currency = \'VES\'
@@ -1448,7 +1447,6 @@ class PurchaseRepository implements IPurchaseRepository
             THEN purchases.amount
             ELSE 0
         END) as total_amount_ves'),
-            // ✨ Sumar montos en USD
             DB::raw('SUM(CASE
             WHEN purchases.status = \'completed\'
             AND purchases.currency = \'USD\'
@@ -1462,17 +1460,13 @@ class PurchaseRepository implements IPurchaseRepository
             ->where('purchases.status', 'completed')
             ->whereNotNull('purchases.identificacion')
             ->whereNotNull('purchases.fullname')
-
-            // ✅ EXCLUIR ADMINISTRADORES
             ->where(function ($query) {
                 $query->whereNull('users.id')
                     ->orWhere('users.role', '!=', 'admin');
             })
-
-            // ✅ EXCLUIR CÉDULA ESPECÍFICA
             ->where('purchases.identificacion', 'NOT LIKE', '%25672732%');
 
-        // ✨ AGRUPAR SOLO POR USUARIO (sin currency)
+        // ✨ AGRUPAR por identificación normalizada
         $query->groupBy('purchases.identificacion', 'purchases.fullname', 'purchases.user_id')
             ->havingRaw(
                 'COUNT(CASE
@@ -1482,7 +1476,6 @@ class PurchaseRepository implements IPurchaseRepository
             END) >= ?',
                 ['completed', 'RECHAZADO%', $minTickets]
             )
-            // ✨ ORDENAR POR TOTAL DE TICKETS (todas las monedas)
             ->orderByRaw('COUNT(CASE
             WHEN purchases.status = \'completed\'
             AND (purchases.ticket_number NOT LIKE \'RECHAZADO%\' OR purchases.ticket_number IS NULL)
@@ -1498,7 +1491,6 @@ class PurchaseRepository implements IPurchaseRepository
                 'identificacion' => $buyer->identificacion,
                 'fullname' => $buyer->fullname,
                 'total_tickets' => (int) $buyer->total_tickets,
-                // ✨ Mostrar totales separados por moneda
                 'purchases' => [
                     'ves' => [
                         'amount' => number_format((float) $buyer->total_amount_ves, 2),

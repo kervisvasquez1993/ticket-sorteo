@@ -477,4 +477,45 @@ class Purchase extends Model
         // Formatear a 4 dígitos antes de guardar
         $this->attributes['ticket_number'] = str_pad((int)$value, 4, '0', STR_PAD_LEFT);
     }
+    // ====================================================================
+// ✅ NORMALIZACIÓN DE IDENTIFICACIÓN
+// ====================================================================
+
+    /**
+     * Normaliza una identificación removiendo prefijos y caracteres especiales
+     */
+    public static function normalizeIdentificacion(?string $identificacion): ?string
+    {
+        if (empty($identificacion)) {
+            return null;
+        }
+
+        // Convertir a mayúsculas y remover espacios
+        $normalized = strtoupper(trim($identificacion));
+
+        // Remover prefijos comunes (V-, E-, J-, G-, etc.)
+        $normalized = preg_replace('/^[VEJGP]-?/', '', $normalized);
+
+        // Remover guiones, puntos y espacios
+        $normalized = preg_replace('/[\s\.\-]/', '', $normalized);
+
+        return $normalized;
+    }
+
+    /**
+     * Mutator para normalizar automáticamente al guardar
+     */
+    public function setIdentificacionAttribute($value): void
+    {
+        $this->attributes['identificacion'] = self::normalizeIdentificacion($value);
+    }
+
+    /**
+     * Scope para buscar por identificación normalizada
+     */
+    public function scopeByNormalizedIdentificacion(Builder $query, string $identificacion): Builder
+    {
+        $normalized = self::normalizeIdentificacion($identificacion);
+        return $query->where('identificacion', $normalized);
+    }
 }
