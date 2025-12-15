@@ -56,22 +56,30 @@ class PurchaseController extends Controller
      * - payment_method_id (int): Filtrar por método de pago
      *   Ejemplo: ?payment_method_id=3
      *
-     * 2. FILTROS DE BÚSQUEDA:
+     * - is_admin_purchase (boolean): Filtrar por tipo de compra [true=administrativa, false=regular]
+     *   Ejemplo: ?is_admin_purchase=false
+     *
+     * 2. FILTROS DE BÚSQUEDA INDIVIDUALES:
      * - transaction_id (string): Buscar por transaction_id parcial
      *   Ejemplo: ?transaction_id=TXN-20250110
      *
      * - ticket_number (string): Buscar por número de ticket específico
      *   Ejemplo: ?ticket_number=00123
      *
-     * - fullname (string): Buscar por nombre completo del comprador (búsqueda exacta con LIKE)
+     * - fullname (string): Buscar por nombre completo del comprador (búsqueda con ILIKE)
      *   Ejemplo: ?fullname=Juan Perez
      *
-     * - identificacion (string): Filtrar por cédula de identidad
-     *   Ejemplo: ?identificacion=V-12345678
+     * - email (string): Buscar por email del comprador (búsqueda con ILIKE)
+     *   Ejemplo: ?email=juan@example.com
      *
-     * - search (string): Búsqueda global (busca en: transaction_id, payment_reference, email,
-     *   whatsapp, identificacion, ticket_number, fullname, nombre de usuario, nombre de evento)
-     *   Ejemplo: ?search=rodriguez
+     * - whatsapp (string): Buscar por número de WhatsApp (búsqueda con LIKE)
+     *   Ejemplo: ?whatsapp=584241234567
+     *
+     * - identificacion (string): Buscar por cédula de identidad (búsqueda normalizada)
+     *   Ejemplo: ?identificacion=12345678 o ?identificacion=V-12345678
+     *
+     * - payment_reference (string): Buscar por referencia de pago (búsqueda con LIKE)
+     *   Ejemplo: ?payment_reference=REF123
      *
      * 3. FILTROS DE FECHA:
      * - date_from (date): Fecha inicial (formato: YYYY-MM-DD)
@@ -80,9 +88,18 @@ class PurchaseController extends Controller
      * - date_to (date): Fecha final (formato: YYYY-MM-DD)
      *   Ejemplo: ?date_to=2025-01-31
      *
-     * 4. FILTROS DE CANTIDAD:
-     * - min_quantity (int): Filtrar compradores con mínimo X tickets en una transacción
+     * 4. FILTROS DE CANTIDAD Y MONTO:
+     * - min_quantity (int): Filtrar transacciones con mínimo X tickets
      *   Ejemplo: ?min_quantity=50 (trae solo transacciones con 50+ tickets)
+     *
+     * - max_quantity (int): Filtrar transacciones con máximo X tickets
+     *   Ejemplo: ?max_quantity=100 (trae solo transacciones con hasta 100 tickets)
+     *
+     * - min_amount (float): Filtrar transacciones con monto mínimo
+     *   Ejemplo: ?min_amount=1000.00 (transacciones de al menos $1000)
+     *
+     * - max_amount (float): Filtrar transacciones con monto máximo
+     *   Ejemplo: ?max_amount=5000.00 (transacciones de hasta $5000)
      *
      * 5. ORDENAMIENTO:
      * - sort_by (string): Campo por el cual ordenar
@@ -119,84 +136,116 @@ class PurchaseController extends Controller
      *    GET /api/purchases?event_id=1&sort_by=total_customer_purchased&sort_order=desc&per_page=20
      *
      * 4. BUSCAR TODAS LAS COMPRAS DE UN CLIENTE POR CÉDULA:
-     *    GET /api/purchases?identificacion=V-12345678&sort_by=created_at&sort_order=desc
+     *    GET /api/purchases?identificacion=12345678&sort_by=created_at&sort_order=desc
      *
      * 5. BUSCAR POR NOMBRE COMPLETO:
      *    GET /api/purchases?fullname=Juan Perez
      *
-     * 6. COMPRAS COMPLETADAS DE UN EVENTO EN UN RANGO DE FECHAS:
+     * 6. BUSCAR POR EMAIL ESPECÍFICO:
+     *    GET /api/purchases?email=juan@example.com
+     *
+     * 7. BUSCAR POR WHATSAPP:
+     *    GET /api/purchases?whatsapp=584241234567
+     *
+     * 8. COMPRAS COMPLETADAS DE UN EVENTO EN UN RANGO DE FECHAS:
      *    GET /api/purchases?event_id=1&status=completed&date_from=2025-01-01&date_to=2025-01-31
      *
-     * 7. BUSCAR POR NÚMERO DE TICKET ESPECÍFICO:
+     * 9. BUSCAR POR NÚMERO DE TICKET ESPECÍFICO:
      *    GET /api/purchases?ticket_number=00123
      *
-     * 8. BUSCAR POR TRANSACTION_ID:
-     *    GET /api/purchases?transaction_id=TXN-20250110-ABC123
+     * 10. BUSCAR POR TRANSACTION_ID:
+     *     GET /api/purchases?transaction_id=TXN-20250110-ABC123
      *
-     * 9. COMPRAS PENDIENTES DE UN EVENTO:
-     *    GET /api/purchases?event_id=1&status=pending&sort_by=created_at&sort_order=desc
+     * 11. COMPRAS PENDIENTES DE UN EVENTO:
+     *     GET /api/purchases?event_id=1&status=pending&sort_by=created_at&sort_order=desc
      *
-     * 10. BUSCAR POR EMAIL O WHATSAPP (búsqueda global):
-     *     GET /api/purchases?search=juan@example.com
-     *     GET /api/purchases?search=+58424123456
+     * 12. BUSCAR POR REFERENCIA DE PAGO:
+     *     GET /api/purchases?payment_reference=REF-001
      *
-     * 11. COMPRADORES GRANDES (mínimo 50 tickets por transacción):
-     *     GET /api/purchases?min_quantity=50&sort_by=quantity&sort_order=desc
+     * 13. COMPRADORES GRANDES (50 a 100 tickets por transacción):
+     *     GET /api/purchases?min_quantity=50&max_quantity=100&sort_by=quantity&sort_order=desc
      *
-     * 12. ANÁLISIS DE CLIENTES VIP DE UN EVENTO (compras históricas totales):
+     * 14. ANÁLISIS DE CLIENTES VIP DE UN EVENTO (compras históricas totales):
      *     GET /api/purchases?event_id=1&sort_by=total_customer_purchased&sort_order=desc&per_page=50
      *
-     * 13. COMPRAS EN DÓLARES COMPLETADAS:
+     * 15. COMPRAS EN DÓLARES COMPLETADAS:
      *     GET /api/purchases?currency=USD&status=completed
      *
-     * 14. COMPRAS POR MÉTODO DE PAGO ESPECÍFICO:
+     * 16. COMPRAS POR MÉTODO DE PAGO ESPECÍFICO:
      *     GET /api/purchases?payment_method_id=2&sort_by=total_amount&sort_order=desc
      *
-     * 15. BÚSQUEDA GLOBAL POR APELLIDO:
-     *     GET /api/purchases?search=Rodriguez
+     * 17. TRANSACCIONES EN RANGO DE MONTO ($1000 a $5000):
+     *     GET /api/purchases?min_amount=1000&max_amount=5000&sort_by=total_amount&sort_order=desc
      *
-     * 16. LISTAR COMPRADORES PEQUEÑOS (1-10 tickets):
-     *     GET /api/purchases?sort_by=quantity&sort_order=asc&per_page=100
+     * 18. LISTAR COMPRADORES PEQUEÑOS (1-10 tickets):
+     *     GET /api/purchases?max_quantity=10&sort_by=quantity&sort_order=asc&per_page=100
      *
-     * 17. ANÁLISIS MENSUAL DE UN EVENTO:
+     * 19. ANÁLISIS MENSUAL DE UN EVENTO:
      *     GET /api/purchases?event_id=1&date_from=2025-01-01&date_to=2025-01-31&sort_by=created_at&sort_order=desc
      *
-     * 18. HISTORIAL COMPLETO DE COMPRAS DE UN CLIENTE:
-     *     GET /api/purchases?identificacion=V-12345678&sort_by=created_at&sort_order=desc&per_page=100
+     * 20. HISTORIAL COMPLETO DE COMPRAS DE UN CLIENTE:
+     *     GET /api/purchases?identificacion=12345678&sort_by=created_at&sort_order=desc&per_page=100
      *
-     * 19. COMPRAS FALLIDAS PARA ANÁLISIS:
+     * 21. COMPRAS FALLIDAS PARA ANÁLISIS:
      *     GET /api/purchases?status=failed&sort_by=created_at&sort_order=desc
      *
-     * 20. COMBINAR MÚLTIPLES FILTROS (Evento + Moneda + Rango de fechas + Status):
+     * 22. FILTRAR SOLO COMPRAS REGULARES (excluir administrativas):
+     *     GET /api/purchases?is_admin_purchase=false&status=completed
+     *
+     * 23. VER SOLO COMPRAS ADMINISTRATIVAS:
+     *     GET /api/purchases?is_admin_purchase=true
+     *
+     * 24. COMBINAR MÚLTIPLES FILTROS (Evento + Moneda + Rango de fechas + Status):
      *     GET /api/purchases?event_id=1&currency=USD&status=completed&date_from=2025-01-01&date_to=2025-01-31&sort_by=total_amount&sort_order=desc
      *
      * ============================================================================
      * CASOS DE USO AVANZADOS:
      * ============================================================================
      *
-     * 21. DASHBOARD ADMINISTRATIVO - Top 10 compradores del mes:
+     * 25. DASHBOARD ADMINISTRATIVO - Top 10 compradores del mes:
      *     GET /api/purchases?date_from=2025-01-01&date_to=2025-01-31&sort_by=total_customer_purchased&sort_order=desc&per_page=10
      *
-     * 22. ANÁLISIS DE VENTAS - Compras mayores a $1000:
-     *     GET /api/purchases?sort_by=total_amount&sort_order=desc&min_quantity=20
+     * 26. ANÁLISIS DE VENTAS - Compras mayores a $1000:
+     *     GET /api/purchases?min_amount=1000&sort_by=total_amount&sort_order=desc
      *
-     * 23. SEGUIMIENTO DE CLIENTE VIP:
-     *     GET /api/purchases?identificacion=V-12345678&event_id=1&sort_by=created_at&sort_order=asc
+     * 27. SEGUIMIENTO DE CLIENTE VIP POR EMAIL:
+     *     GET /api/purchases?email=vip@example.com&event_id=1&sort_by=created_at&sort_order=asc
      *
-     * 24. VERIFICAR TICKET ESPECÍFICO Y VER COMPRADOR:
+     * 28. VERIFICAR TICKET ESPECÍFICO Y VER COMPRADOR:
      *     GET /api/purchases?ticket_number=00123&event_id=1
      *
-     * 25. REPORTES CONTABLES - Todas las compras completadas del mes en USD:
+     * 29. REPORTES CONTABLES - Todas las compras completadas del mes en USD:
      *     GET /api/purchases?currency=USD&status=completed&date_from=2025-01-01&date_to=2025-01-31&per_page=100
      *
-     * 26. DETECTAR PATRONES - Clientes que compraron más de 100 tickets en múltiples transacciones:
+     * 30. DETECTAR PATRONES - Clientes que compraron más de 100 tickets en múltiples transacciones:
      *     GET /api/purchases?sort_by=total_customer_purchased&sort_order=desc&min_quantity=100
      *
-     * 27. AUDITORÍA - Ver todas las transacciones con un payment_reference específico:
-     *     GET /api/purchases?search=REF-001
+     * 31. AUDITORÍA - Ver todas las transacciones con un payment_reference específico:
+     *     GET /api/purchases?payment_reference=REF-001
      *
-     * 28. MARKETING - Clientes frecuentes de un evento (ordenados por historial):
+     * 32. MARKETING - Clientes frecuentes de un evento (ordenados por historial):
      *     GET /api/purchases?event_id=1&sort_by=total_customer_purchased&sort_order=desc&per_page=50
+     *
+     * 33. ANÁLISIS DE TRANSACCIONES MEDIANAS ($500 a $2000):
+     *     GET /api/purchases?min_amount=500&max_amount=2000&event_id=1
+     *
+     * 34. BUSCAR CLIENTE POR CUALQUIER DATO DE CONTACTO:
+     *     - Por email: ?email=cliente@example.com
+     *     - Por WhatsApp: ?whatsapp=584241234567
+     *     - Por cédula: ?identificacion=12345678
+     *     - Por nombre: ?fullname=Juan
+     *
+     * 35. REPORTES FINANCIEROS - Solo compras regulares con pago real:
+     *     GET /api/purchases?is_admin_purchase=false&status=completed&sort_by=total_amount&sort_order=desc
+     *
+     * 36. ANÁLISIS DE TICKETS REGALADOS (compras administrativas):
+     *     GET /api/purchases?is_admin_purchase=true&event_id=1&sort_by=created_at&sort_order=desc
+     *
+     * 37. VERIFICAR TRANSACCIONES POR RANGO DE TICKETS (10 a 50):
+     *     GET /api/purchases?min_quantity=10&max_quantity=50&event_id=1
+     *
+     * 38. BUSCAR TRANSACCIÓN ESPECÍFICA POR MÚLTIPLES CRITERIOS:
+     *     GET /api/purchases?event_id=1&identificacion=12345678&date_from=2025-01-01&date_to=2025-01-31
      *
      * ============================================================================
      * RESPUESTA EXITOSA (200):
@@ -213,7 +262,7 @@ class PurchaseController extends Controller
      *       "fullname": "Juan Pérez López",
      *       "email": "juan@example.com",
      *       "whatsapp": "+58424123456",
-     *       "identificacion": "V-12345678",
+     *       "identificacion": "12345678",
      *       "quantity": 100,                    // Cantidad en ESTA transacción
      *       "total_customer_purchased": 450,    // Total histórico del cliente en el evento
      *       "unit_price": "50.00",
@@ -224,7 +273,7 @@ class PurchaseController extends Controller
      *       "payment_proof": "https://...",
      *       "qr_code_url": "https://...",
      *       "status": "completed",
-     *       "ticket_numbers": ["00001", "00002", "00003"],
+     *       "ticket_numbers": ["0001", "0002", "0003"],
      *       "purchase_ids": [1, 2, 3],
      *       "created_at": "2025-01-10 15:30:00"
      *     }
@@ -250,10 +299,14 @@ class PurchaseController extends Controller
      * NOTAS IMPORTANTES:
      * ============================================================================
      * - Los filtros son COMBINABLES para análisis complejos
+     * - Todos los filtros de búsqueda son INDIVIDUALES y ESPECÍFICOS por campo
      * - quantity: Tickets en la transacción actual
      * - total_customer_purchased: Suma de TODOS los tickets del cliente en ese evento (historial)
-     * - search: Búsqueda global en múltiples campos
-     * - fullname: Búsqueda específica solo en el campo nombre
+     * - fullname, email, whatsapp, identificacion: Búsquedas específicas por campo individual
+     * - identificacion: Se normaliza automáticamente (remueve prefijos V-, E-, guiones, espacios)
+     * - min/max_quantity: Filtran por cantidad de tickets en la transacción
+     * - min/max_amount: Filtran por monto total de la transacción
+     * - is_admin_purchase: Permite diferenciar entre compras regulares y administrativas
      * - El ordenamiento por defecto es por 'quantity' DESC (mayor a menor)
      * - La paginación por defecto es 15 resultados por página
      *

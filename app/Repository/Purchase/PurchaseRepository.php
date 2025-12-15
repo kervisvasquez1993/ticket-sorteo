@@ -472,15 +472,42 @@ class PurchaseRepository implements IPurchaseRepository
                 'user_id'
             );
 
-        // ✨ Filtro por cantidad mínima
-        if ($filters && $filters->getMinQuantity()) {
-            $query->havingRaw(
-                'COUNT(CASE WHEN (ticket_number NOT LIKE ? OR ticket_number IS NULL) AND status != ? THEN 1 END) >= ?',
-                ['RECHAZADO%', 'failed', $filters->getMinQuantity()]
-            );
+        // ✨ Filtros con HAVING (después del GROUP BY)
+        if ($filters) {
+            // Filtro por cantidad mínima
+            if ($filters->getMinQuantity()) {
+                $query->havingRaw(
+                    'COUNT(CASE WHEN (ticket_number NOT LIKE ? OR ticket_number IS NULL) AND status != ? THEN 1 END) >= ?',
+                    ['RECHAZADO%', 'failed', $filters->getMinQuantity()]
+                );
+            }
+
+            // ✨ NUEVO: Filtro por cantidad máxima
+            if ($filters->getMaxQuantity()) {
+                $query->havingRaw(
+                    'COUNT(CASE WHEN (ticket_number NOT LIKE ? OR ticket_number IS NULL) AND status != ? THEN 1 END) <= ?',
+                    ['RECHAZADO%', 'failed', $filters->getMaxQuantity()]
+                );
+            }
+
+            // ✨ NUEVO: Filtro por monto mínimo
+            if ($filters->getMinAmount()) {
+                $query->havingRaw(
+                    'SUM(CASE WHEN (ticket_number NOT LIKE ? OR ticket_number IS NULL) AND status != ? THEN amount ELSE 0 END) >= ?',
+                    ['RECHAZADO%', 'failed', $filters->getMinAmount()]
+                );
+            }
+
+            // ✨ NUEVO: Filtro por monto máximo
+            if ($filters->getMaxAmount()) {
+                $query->havingRaw(
+                    'SUM(CASE WHEN (ticket_number NOT LIKE ? OR ticket_number IS NULL) AND status != ? THEN amount ELSE 0 END) <= ?',
+                    ['RECHAZADO%', 'failed', $filters->getMaxAmount()]
+                );
+            }
         }
 
-        // ✨ ORDENAMIENTO
+        // Ordenamiento
         if ($filters && $filters->isValidSortField() && $filters->isValidSortOrder()) {
             $this->applySorting($query, $filters);
         } else {
@@ -493,18 +520,18 @@ class PurchaseRepository implements IPurchaseRepository
 
         $paginatedResults = $query->paginate($perPage, ['*'], 'page', $page);
 
-        // ✨ Formatear y calcular total_customer_purchased
+        // Formatear y calcular total_customer_purchased
         $data = $paginatedResults->map(function ($group) {
             return $this->formatGroupedPurchase($group);
         });
 
-        // ✨ Si se ordenó por total_customer_purchased, reordenar en memoria
+        // Si se ordenó por total_customer_purchased, reordenar en memoria
         if ($filters && $filters->getSortBy() === 'total_customer_purchased') {
             $sortOrder = $filters->getSortOrder();
             $data = $data->sortBy(function ($item) {
                 return $item['total_customer_purchased'];
             }, SORT_REGULAR, $sortOrder === 'desc');
-            $data = $data->values(); // Re-indexar
+            $data = $data->values();
         }
 
         return [
@@ -826,6 +853,7 @@ class PurchaseRepository implements IPurchaseRepository
     }
     private function applyFilters($query, DTOsPurchaseFilter $filters)
     {
+        // Filtros exactos por ID
         if ($filters->getUserId()) {
             $query->where('user_id', $filters->getUserId());
         }
@@ -834,6 +862,11 @@ class PurchaseRepository implements IPurchaseRepository
             $query->where('event_id', $filters->getEventId());
         }
 
+        if ($filters->getPaymentMethodId()) {
+            $query->where('payment_method_id', $filters->getPaymentMethodId());
+        }
+
+        // Filtros por valores específicos
         if ($filters->getStatus() && $filters->isValidStatus()) {
             $query->where('status', $filters->getStatus());
         }
@@ -842,24 +875,46 @@ class PurchaseRepository implements IPurchaseRepository
             $query->where('currency', $filters->getCurrency());
         }
 
-        if ($filters->getPaymentMethodId()) {
-            $query->where('payment_method_id', $filters->getPaymentMethodId());
+        // ✨ NUEVO: Filtro por tipo de compra
+        if (!is_null($filters->getIsAdminPurchase())) {
+            $query->where('is_admin_purchase', $filters->getIsAdminPurchase());
         }
 
+        // Filtros por búsqueda parcial (LIKE/ILIKE)
         if ($filters->getTransactionId()) {
             $query->where('transaction_id', 'LIKE', '%' . $filters->getTransactionId() . '%');
         }
 
-        // ✨ Filtro por número de ticket
         if ($filters->getTicketNumber()) {
             $query->where('ticket_number', 'LIKE', '%' . $filters->getTicketNumber() . '%');
         }
 
-        // ✨ NUEVO: Filtro por nombre completo
         if ($filters->getFullname()) {
             $query->where('fullname', 'ILIKE', '%' . $filters->getFullname() . '%');
         }
 
+        // ✨ NUEVO: Filtro por email
+        if ($filters->getEmail()) {
+            $query->where('email', 'ILIKE', '%' . $filters->getEmail() . '%');
+        }
+
+        // ✨ NUEVO: Filtro por whatsapp
+        if ($filters->getWhatsapp()) {
+            $query->where('whatsapp', 'LIKE', '%' . $filters->getWhatsapp() . '%');
+        }
+
+        // ✨ NUEVO: Filtro por identificación (con normalización)
+        if ($filters->getIdentificacion()) {
+            $normalized = Purchase::normalizeIdentificacion($filters->getIdentificacion());
+            $query->where('identificacion', 'LIKE', '%' . $normalized . '%');
+        }
+
+        // ✨ NUEVO: Filtro por referencia de pago
+        if ($filters->getPaymentReference()) {
+            $query->where('payment_reference', 'LIKE', '%' . $filters->getPaymentReference() . '%');
+        }
+
+        // Filtros por rangos de fechas
         if ($filters->getDateFrom()) {
             $query->whereDate('created_at', '>=', $filters->getDateFrom());
         }
@@ -868,27 +923,8 @@ class PurchaseRepository implements IPurchaseRepository
             $query->whereDate('created_at', '<=', $filters->getDateTo());
         }
 
-        if ($filters->getSearch()) {
-            $search = $filters->getSearch();
-            $query->where(function ($q) use ($search) {
-                $q->where('transaction_id', 'LIKE', '%' . $search . '%')
-                    ->orWhere('payment_reference', 'LIKE', '%' . $search . '%')
-                    ->orWhere('email', 'LIKE', '%' . $search . '%')
-                    ->orWhere('whatsapp', 'LIKE', '%' . $search . '%')
-                    ->orWhere('identificacion', 'LIKE', '%' . $search . '%')
-                    ->orWhere('ticket_number', 'LIKE', '%' . $search . '%')
-                    ->orWhere('fullname', 'ILIKE', '%' . $search . '%') // ✨ AGREGADO
-                    ->orWhereHas('user', function ($userQuery) use ($search) {
-                        $userQuery->where('name', 'LIKE', '%' . $search . '%')
-                            ->orWhere('email', 'LIKE', '%' . $search . '%');
-                    })
-                    ->orWhereHas('event', function ($eventQuery) use ($search) {
-                        $eventQuery->where('name', 'LIKE', '%' . $search . '%');
-                    });
-            });
-        }
+        // ✅ REMOVIDO: El filtro general "search" ya no existe
     }
-
     private function applySorting($query, DTOsPurchaseFilter $filters)
     {
         $sortBy = $filters->getSortBy();

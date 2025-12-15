@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 
 class DTOsPurchaseFilter
 {
-     private static function formatTicketNumberSearch(?string $ticketNumber): ?string
+    private static function formatTicketNumberSearch(?string $ticketNumber): ?string
     {
         if (is_null($ticketNumber) || empty($ticketNumber)) {
             return null;
@@ -16,6 +16,7 @@ class DTOsPurchaseFilter
         }
         return $ticketNumber;
     }
+
     public function __construct(
         private readonly ?int $user_id = null,
         private readonly ?int $event_id = null,
@@ -25,11 +26,18 @@ class DTOsPurchaseFilter
         private readonly ?string $transaction_id = null,
         private readonly ?string $date_from = null,
         private readonly ?string $date_to = null,
-        private readonly ?string $search = null,
         private readonly ?string $ticket_number = null,
-        private readonly ?string $fullname = null, // ✨ NUEVO
-        private readonly ?int $min_quantity = null, // ✨ NUEVO
-        private readonly ?string $sort_by = 'quantity', // ✨ CAMBIADO: default por quantity
+        private readonly ?string $fullname = null,
+        private readonly ?string $email = null, // ✨ NUEVO
+        private readonly ?string $whatsapp = null, // ✨ NUEVO
+        private readonly ?string $identificacion = null, // ✨ NUEVO
+        private readonly ?string $payment_reference = null, // ✨ NUEVO
+        private readonly ?bool $is_admin_purchase = null, // ✨ NUEVO
+        private readonly ?int $min_quantity = null,
+        private readonly ?int $max_quantity = null, // ✨ NUEVO
+        private readonly ?float $min_amount = null, // ✨ NUEVO
+        private readonly ?float $max_amount = null, // ✨ NUEVO
+        private readonly ?string $sort_by = 'quantity',
         private readonly ?string $sort_order = 'desc',
         private readonly int $page = 1,
         private readonly int $per_page = 15
@@ -46,11 +54,20 @@ class DTOsPurchaseFilter
             transaction_id: $request->get('transaction_id'),
             date_from: $request->get('date_from'),
             date_to: $request->get('date_to'),
-            search: $request->get('search'),
             ticket_number: self::formatTicketNumberSearch($request->get('ticket_number')),
-            fullname: $request->get('fullname'), // ✨ NUEVO
-            min_quantity: $request->get('min_quantity') ? (int) $request->get('min_quantity') : null, // ✨ NUEVO
-            sort_by: $request->get('sort_by', 'quantity'), // ✨ CAMBIADO
+            fullname: $request->get('fullname'),
+            email: $request->get('email'), // ✨ NUEVO
+            whatsapp: $request->get('whatsapp'), // ✨ NUEVO
+            identificacion: $request->get('identificacion'), // ✨ NUEVO
+            payment_reference: $request->get('payment_reference'), // ✨ NUEVO
+            is_admin_purchase: $request->has('is_admin_purchase')
+                ? filter_var($request->get('is_admin_purchase'), FILTER_VALIDATE_BOOLEAN)
+                : null, // ✨ NUEVO
+            min_quantity: $request->get('min_quantity') ? (int) $request->get('min_quantity') : null,
+            max_quantity: $request->get('max_quantity') ? (int) $request->get('max_quantity') : null, // ✨ NUEVO
+            min_amount: $request->get('min_amount') ? (float) $request->get('min_amount') : null, // ✨ NUEVO
+            max_amount: $request->get('max_amount') ? (float) $request->get('max_amount') : null, // ✨ NUEVO
+            sort_by: $request->get('sort_by', 'quantity'),
             sort_order: $request->get('sort_order', 'desc'),
             page: (int) $request->get('page', 1),
             per_page: (int) $request->get('per_page', 15)
@@ -68,10 +85,17 @@ class DTOsPurchaseFilter
             'transaction_id' => $this->transaction_id,
             'date_from' => $this->date_from,
             'date_to' => $this->date_to,
-            'search' => $this->search,
             'ticket_number' => $this->ticket_number,
-            'fullname' => $this->fullname, // ✨ NUEVO
-            'min_quantity' => $this->min_quantity, // ✨ NUEVO
+            'fullname' => $this->fullname,
+            'email' => $this->email,
+            'whatsapp' => $this->whatsapp,
+            'identificacion' => $this->identificacion,
+            'payment_reference' => $this->payment_reference,
+            'is_admin_purchase' => $this->is_admin_purchase,
+            'min_quantity' => $this->min_quantity,
+            'max_quantity' => $this->max_quantity,
+            'min_amount' => $this->min_amount,
+            'max_amount' => $this->max_amount,
             'sort_by' => $this->sort_by,
             'sort_order' => $this->sort_order,
             'page' => $this->page,
@@ -81,52 +105,122 @@ class DTOsPurchaseFilter
         });
     }
 
-    // ✨ NUEVOS GETTERS
-    public function getFullname(): ?string
+    // ✨ GETTERS
+    public function getUserId(): ?int
     {
-        return $this->fullname;
+        return $this->user_id;
     }
-
-    public function getMinQuantity(): ?int
+    public function getEventId(): ?int
     {
-        return $this->min_quantity;
+        return $this->event_id;
     }
-
+    public function getStatus(): ?string
+    {
+        return $this->status;
+    }
+    public function getCurrency(): ?string
+    {
+        return $this->currency;
+    }
+    public function getPaymentMethodId(): ?int
+    {
+        return $this->payment_method_id;
+    }
+    public function getTransactionId(): ?string
+    {
+        return $this->transaction_id;
+    }
+    public function getDateFrom(): ?string
+    {
+        return $this->date_from;
+    }
+    public function getDateTo(): ?string
+    {
+        return $this->date_to;
+    }
     public function getTicketNumber(): ?string
     {
         return $this->ticket_number;
     }
-
-    // Getters existentes
-    public function getUserId(): ?int { return $this->user_id; }
-    public function getEventId(): ?int { return $this->event_id; }
-    public function getStatus(): ?string { return $this->status; }
-    public function getCurrency(): ?string { return $this->currency; }
-    public function getPaymentMethodId(): ?int { return $this->payment_method_id; }
-    public function getTransactionId(): ?string { return $this->transaction_id; }
-    public function getDateFrom(): ?string { return $this->date_from; }
-    public function getDateTo(): ?string { return $this->date_to; }
-    public function getSearch(): ?string { return $this->search; }
-    public function getSortBy(): string { return $this->sort_by; }
-    public function getSortOrder(): string { return $this->sort_order; }
-    public function getPage(): int { return $this->page; }
-    public function getPerPage(): int { return $this->per_page; }
+    public function getFullname(): ?string
+    {
+        return $this->fullname;
+    }
+    public function getEmail(): ?string
+    {
+        return $this->email;
+    }
+    public function getWhatsapp(): ?string
+    {
+        return $this->whatsapp;
+    }
+    public function getIdentificacion(): ?string
+    {
+        return $this->identificacion;
+    }
+    public function getPaymentReference(): ?string
+    {
+        return $this->payment_reference;
+    }
+    public function getIsAdminPurchase(): ?bool
+    {
+        return $this->is_admin_purchase;
+    }
+    public function getMinQuantity(): ?int
+    {
+        return $this->min_quantity;
+    }
+    public function getMaxQuantity(): ?int
+    {
+        return $this->max_quantity;
+    }
+    public function getMinAmount(): ?float
+    {
+        return $this->min_amount;
+    }
+    public function getMaxAmount(): ?float
+    {
+        return $this->max_amount;
+    }
+    public function getSortBy(): string
+    {
+        return $this->sort_by;
+    }
+    public function getSortOrder(): string
+    {
+        return $this->sort_order;
+    }
+    public function getPage(): int
+    {
+        return $this->page;
+    }
+    public function getPerPage(): int
+    {
+        return $this->per_page;
+    }
 
     // Métodos de utilidad
     public function hasFilters(): bool
     {
         return !empty($this->user_id) ||
-               !empty($this->event_id) ||
-               !empty($this->status) ||
-               !empty($this->currency) ||
-               !empty($this->payment_method_id) ||
-               !empty($this->transaction_id) ||
-               !empty($this->date_from) ||
-               !empty($this->date_to) ||
-               !empty($this->search) ||
-               !empty($this->ticket_number) ||
-               !empty($this->fullname) || // ✨ NUEVO
-               !empty($this->min_quantity); // ✨ NUEVO
+            !empty($this->event_id) ||
+            !empty($this->status) ||
+            !empty($this->currency) ||
+            !empty($this->payment_method_id) ||
+            !empty($this->transaction_id) ||
+            !empty($this->date_from) ||
+            !empty($this->date_to) ||
+            !empty($this->ticket_number) ||
+            !empty($this->fullname) ||
+            !empty($this->email) ||
+            !empty($this->whatsapp) ||
+            !empty($this->identificacion) ||
+            !empty($this->payment_reference) ||
+            !is_null($this->is_admin_purchase) ||
+            !empty($this->min_quantity) ||
+            !empty($this->max_quantity) ||
+            !empty($this->min_amount) ||
+            !empty($this->max_amount);
     }
 
     public function getValidStatuses(): array
@@ -157,7 +251,7 @@ class DTOsPurchaseFilter
 
     public function getValidSortFields(): array
     {
-        return ['created_at', 'total_amount', 'status', 'quantity', 'total_customer_purchased']; // ✨ AGREGADO
+        return ['created_at', 'total_amount', 'status', 'quantity', 'total_customer_purchased'];
     }
 
     public function isValidSortField(): bool
@@ -211,21 +305,48 @@ class DTOsPurchaseFilter
             $filters['date_to'] = $this->date_to;
         }
 
-        if (!empty($this->search)) {
-            $filters['search'] = $this->search;
-        }
-
         if (!empty($this->ticket_number)) {
             $filters['ticket_number'] = $this->ticket_number;
         }
 
-        // ✨ NUEVOS
         if (!empty($this->fullname)) {
             $filters['fullname'] = $this->fullname;
         }
 
+        if (!empty($this->email)) {
+            $filters['email'] = $this->email;
+        }
+
+        if (!empty($this->whatsapp)) {
+            $filters['whatsapp'] = $this->whatsapp;
+        }
+
+        if (!empty($this->identificacion)) {
+            $filters['identificacion'] = $this->identificacion;
+        }
+
+        if (!empty($this->payment_reference)) {
+            $filters['payment_reference'] = $this->payment_reference;
+        }
+
+        if (!is_null($this->is_admin_purchase)) {
+            $filters['is_admin_purchase'] = $this->is_admin_purchase;
+        }
+
         if (!empty($this->min_quantity)) {
             $filters['min_quantity'] = $this->min_quantity;
+        }
+
+        if (!empty($this->max_quantity)) {
+            $filters['max_quantity'] = $this->max_quantity;
+        }
+
+        if (!empty($this->min_amount)) {
+            $filters['min_amount'] = $this->min_amount;
+        }
+
+        if (!empty($this->max_amount)) {
+            $filters['max_amount'] = $this->max_amount;
         }
 
         return $filters;
