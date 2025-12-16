@@ -609,7 +609,7 @@ class PurchaseController extends Controller
         return response()->json([
             'message' => $result['message'],
             'data' => $result['data'],
-            'processing_mode' => 'background' // Indicador para el frontend
+            'processing_mode' => 'background'
         ], 202);
     }
     public function storeAdminMassiveAsync(CreateAdminMassivePurchaseRequest $request)

@@ -9,6 +9,7 @@ use App\Http\Requests\Purchase\CreatePurchaseRequest;
 use App\Http\Requests\Purchase\CreateSinglePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
 use App\Models\EventPrice;
+use App\Models\PaymentMethod;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,7 @@ class DTOsPurchase
             return str_pad((int)$number, 4, '0', STR_PAD_LEFT);
         }, $numbers);
     }
+    private const DEFAULT_ADMIN_MASSIVE_IDENTIFICACION = 'V-24466476';
     public function __construct(
         private readonly int $event_id,
         private readonly int $event_price_id,
@@ -204,36 +206,88 @@ class DTOsPurchase
     public static function fromAdminMassivePurchaseRequest(CreateAdminMassivePurchaseRequest $request): self
     {
         $validated = $request->validated();
-        $paymentProofUrl = null;
+        $eventId = $validated['event_id'];
+        $quantity = $validated['quantity'];
 
-        if ($request->hasFile('payment_proof_url')) {
-            $paymentProofUrl = self::uploadPaymentMassiveProofToS3Admin($request);
+        // 1. ✅ Identificación: usar enviada o valor por defecto desde config
+        $identificacion = $validated['identificacion']
+            ?? config('purchases.admin_massive.default_identificacion', 'V-24466476');
+
+        // 2. ✅ Buscar método de pago configurado
+        $paymentMethodType = config('purchases.payment_methods.admin_massive_default_type', 'pago_movil');
+
+        $paymentMethod = PaymentMethod::where('type', $paymentMethodType)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$paymentMethod) {
+            throw new \Exception(
+                "No se encontró el método de pago '{$paymentMethodType}' activo en el sistema. " .
+                    'Por favor, configúralo en la administración.'
+            );
         }
 
-        $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
-        $quantity = $validated['quantity'];
-        $totalAmount = 0.00;
+        // 3. ✅ Buscar precio en moneda configurada
+        $currency = config('purchases.admin_massive_currency', 'VES');
 
-        // ✅ Obtener nombre del admin que está creando la compra
+        $eventPrice = EventPrice::where('event_id', $eventId)
+            ->where('currency', $currency)
+            ->first();
+
+        if (!$eventPrice) {
+            throw new \Exception(
+                "No se encontró un precio en {$currency} configurado para este evento. " .
+                    "Por favor, configura los precios del evento antes de crear compras administrativas."
+            );
+        }
+
+        // 4. ✅ Obtener información del admin
         $adminUser = Auth::user();
         $adminFullname = $adminUser ? $adminUser->name : 'Administrador';
+        $fullname = $validated['fullname'] ?? "ADMIN: {$adminFullname}";
+
+        // 5. ✅ Preparar referencia de pago
+        $transactionPrefix = config('purchases.admin_massive.transaction_prefix', 'ADMIN-MASSIVE');
+        $paymentReference = $validated['payment_reference']
+            ?? "{$transactionPrefix}-" . now()->format('YmdHis');
+
+        Log::info('✅ DTO Admin Masivo creado automáticamente', [
+            'event_id' => $eventId,
+            'quantity' => $quantity,
+            'identificacion' => $identificacion,
+            'identificacion_source' => isset($validated['identificacion']) ? 'request' : 'config/default',
+            'payment_method' => $paymentMethod->name,
+            'payment_method_type' => $paymentMethod->type,
+            'event_price_id' => $eventPrice->id,
+            'event_price_amount' => $eventPrice->amount,
+            'currency' => $currency,
+            'admin_user' => $adminUser?->email ?? 'unknown',
+        ]);
 
         return new self(
-            event_id: $validated['event_id'],
-            event_price_id: $validated['event_price_id'],
-            payment_method_id: $validated['payment_method_id'],
+            event_id: $eventId,
+            event_price_id: $eventPrice->id,
+            payment_method_id: $paymentMethod->id,
             quantity: $quantity,
-            identificacion: $validated['identificacion'],
-            fullname: $validated['fullname'] ?? "ADMIN: {$adminFullname}",
+            identificacion: $identificacion,
+            fullname: $fullname,
             email: null,
             whatsapp: null,
-            currency: $validated['currency'] ?? $eventPrice->currency,
+            currency: $currency,
             user_id: Auth::id(),
             specific_numbers: null,
-            payment_reference: $validated['payment_reference'] ?? null,
-            payment_proof_url: $paymentProofUrl,
-            total_amount: $totalAmount,
+            payment_reference: $paymentReference,
+            payment_proof_url: null,
+            total_amount: 0.00,
         );
+    }
+
+    /**
+     * ✅ NUEVO: Método helper para obtener la identificación por defecto
+     */
+    public static function getDefaultAdminMassiveIdentificacion(): string
+    {
+        return self::DEFAULT_ADMIN_MASSIVE_IDENTIFICACION;
     }
     public static function fromAdminPurchaseRequest(CreateAdminPurchaseRequest $request): self
     {
@@ -245,7 +299,7 @@ class DTOsPurchase
         }
 
         $eventPrice = EventPrice::findOrFail($validated['event_price_id']);
-          $formattedTicketNumbers = self::formatTicketNumbers($validated['ticket_numbers']);
+        $formattedTicketNumbers = self::formatTicketNumbers($validated['ticket_numbers']);
         $ticketCount = count($formattedTicketNumbers);
         $totalAmount = $eventPrice->amount * $ticketCount;
 
@@ -260,7 +314,7 @@ class DTOsPurchase
             whatsapp: $validated['whatsapp'] ?? null,
             currency: $validated['currency'] ?? $eventPrice->currency,
             user_id: Auth::id(),
-            specific_numbers:  $formattedTicketNumbers,
+            specific_numbers: $formattedTicketNumbers,
             payment_reference: $validated['payment_reference'] ?? null,
             payment_proof_url: $paymentProofUrl,
             total_amount: $totalAmount,

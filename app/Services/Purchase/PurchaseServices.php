@@ -1286,14 +1286,20 @@ class PurchaseServices implements IPurchaseServices
             ];
         }
     }
+    /**
+     * ✅ ACTUALIZADO: Crear compra masiva async con validaciones automáticas
+     * Ahora funciona con payload simplificado: solo event_id + quantity
+     */
     public function createMassivePurchaseAsync(DTOsPurchase $data, bool $autoApprove = true): array
     {
         try {
-            // 1. Validar evento y precio
+            // 1. ✅ Validar evento
             $event = Event::findOrFail($data->getEventId());
+
+            // 2. ✅ Validar precio (el DTO ya lo buscó, pero validamos que exista)
             $eventPrice = EventPrice::findOrFail($data->getEventPriceId());
 
-            // 2. Verificar disponibilidad de números
+            // 3. ✅ Verificar disponibilidad de números
             $availableCount = $this->getAvailableNumbersCount($event);
 
             if ($availableCount < $data->getQuantity()) {
@@ -1303,46 +1309,53 @@ class PurchaseServices implements IPurchaseServices
                 ];
             }
 
-            // 3. Generar transaction_id único
-            $transactionId = $this->generateUniqueTransactionId();
+            // 4. ✅ Generar transaction_id único con prefijo administrativo
+            $transactionPrefix = config('purchases.admin_massive.transaction_prefix', 'ADMIN-MASSIVE');
+            $transactionId = $this->generateUniqueTransactionId($transactionPrefix);
 
-            // 4. ✅ Asegurar que currency siempre tenga un valor
-            $currency = $data->getCurrency() ?? $eventPrice->currency ?? 'USD';
+            // 5. ✅ Obtener método de pago (ya viene en el DTO)
+            $paymentMethod = \App\Models\PaymentMethod::findOrFail($data->getPaymentMethodId());
 
-            // 5. ✅ Preparar datos para el job
+            // 6. ✅ Preparar datos para el job
             $jobData = [
                 'event_id' => $data->getEventId(),
                 'event_price_id' => $data->getEventPriceId(),
                 'payment_method_id' => $data->getPaymentMethodId(),
-                'user_id' => $data->getUserId() ?? null,
-                'email' => $data->getEmail() ?? null,
-                'whatsapp' => $data->getWhatsapp() ?? null,
-                'identificacion' => $data->getIdentificacion() ?? null,
-                'currency' => $currency,
+                'user_id' => $data->getUserId(),
+                'fullname' => $data->getFullname(),
+                'email' => null, // ✅ Compras admin no tienen email
+                'whatsapp' => null, // ✅ Compras admin no tienen whatsapp
+                'identificacion' => $data->getIdentificacion(),
+                'currency' => 'VES', // ✅ Siempre VES para admin masivo
                 'quantity' => $data->getQuantity(),
-                'payment_reference' => $data->getPaymentReference() ?? 'ADMIN-MASSIVE-' . $transactionId,
-                'payment_proof_url' => $data->getPaymentProofUrl() ?? null,
+                'payment_reference' => $data->getPaymentReference(),
+                'payment_proof_url' => null, // ✅ Sin comprobante en masivas
             ];
 
-            // 6. ✅ Despachar job con flag de compra administrativa
+            // 7. ✅ Despachar job
             \App\Jobs\ProcessMassivePurchaseJob::dispatch(
                 $jobData,
                 $transactionId,
                 $autoApprove,
-                'ADMIN-MASSIVE',
-                true // ✅ isAdminPurchase = true (monto será $0)
+                $transactionPrefix,
+                true // ✅ isAdminPurchase = true
             )->onQueue('massive-purchases');
 
             Log::info('🚀 Compra masiva administrativa despachada', [
                 'transaction_id' => $transactionId,
                 'quantity' => $data->getQuantity(),
                 'event_id' => $event->id,
+                'event_name' => $event->name,
+                'payment_method' => $paymentMethod->name,
+                'payment_method_type' => $paymentMethod->type,
+                'price_amount' => $eventPrice->amount,
+                'currency' => 'VES',
+                'identificacion' => $data->getIdentificacion(),
                 'auto_approve' => $autoApprove,
-                'is_admin' => true,
-                'amount' => 0.00
+                'admin_user' => auth()->user()?->email ?? 'unknown',
             ]);
 
-            // 7. ✅ Retornar respuesta con monto $0
+            // 8. ✅ Retornar respuesta
             return [
                 'success' => true,
                 'message' => 'Tu compra de ' . number_format($data->getQuantity()) . ' tickets está siendo procesada en segundo plano.',
@@ -1350,21 +1363,48 @@ class PurchaseServices implements IPurchaseServices
                     'transaction_id' => $transactionId,
                     'quantity' => $data->getQuantity(),
                     'total_amount' => 0.00, // ✅ Compra administrativa sin costo
-                    'currency' => $currency,
+                    'currency' => 'VES',
                     'status' => 'processing',
-                    'is_admin_purchase' => true, // ✅ Indicador para el frontend
-                    'estimated_completion' => now()->addMinutes(ceil($data->getQuantity() / 100))->toDateTimeString(),
-                    'estimated_time' => $this->estimateProcessingTime($data->getQuantity()),
+                    'is_admin_purchase' => true,
+                    'identificacion' => $data->getIdentificacion(),
+                    'payment_method' => [
+                        'id' => $paymentMethod->id,
+                        'name' => $paymentMethod->name,
+                        'type' => $paymentMethod->type,
+                    ],
                     'event' => [
                         'id' => $event->id,
-                        'name' => $event->name
-                    ]
+                        'name' => $event->name,
+                        'price' => [
+                            'amount' => $eventPrice->amount,
+                            'currency' => 'VES',
+                        ],
+                    ],
+                    'estimated_completion' => now()
+                        ->addMinutes(ceil($data->getQuantity() / 100))
+                        ->toDateTimeString(),
+                    'estimated_time' => $this->estimateProcessingTime($data->getQuantity()),
                 ]
+            ];
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('❌ Modelo no encontrado en compra masiva administrativa', [
+                'error' => $e->getMessage(),
+                'event_id' => $data->getEventId() ?? 'N/A',
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'No se encontró el evento o precio configurado. Por favor verifica la configuración.'
             ];
         } catch (\Exception $exception) {
             Log::error('❌ Error al despachar compra masiva administrativa', [
                 'error' => $exception->getMessage(),
-                'trace' => $exception->getTraceAsString()
+                'trace' => $exception->getTraceAsString(),
+                'dto_data' => [
+                    'event_id' => $data->getEventId() ?? 'N/A',
+                    'quantity' => $data->getQuantity() ?? 'N/A',
+                    'identificacion' => $data->getIdentificacion() ?? 'N/A',
+                ]
             ]);
 
             return [
