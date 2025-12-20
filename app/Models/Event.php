@@ -278,51 +278,75 @@ class Event extends Model
     public function getStatistics(): array
     {
         $totalNumbers = ($this->end_number - $this->start_number) + 1;
+
+        // ✅ Obtener IDs de lista negra de este evento
+        $blacklistedIds = $this->blacklistedIdentifications()
+            ->pluck('identificacion')
+            ->toArray();
+
+        // ✅ Contar números vendidos (EXCLUYENDO lista negra)
         $soldNumbers = $this->purchases()
             ->whereNotNull('ticket_number')
             ->where('status', 'completed')
+            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                $query->whereNotIn('identificacion', $blacklistedIds);
+            })
             ->count();
+
         $availableNumbers = $totalNumbers - $soldNumbers;
         $percentageSold = $totalNumbers > 0 ? ($soldNumbers / $totalNumbers) * 100 : 0;
 
-        // Contar participantes únicos (por email o user_id)
+        // ✅ Contar participantes únicos (EXCLUYENDO lista negra)
         $uniqueParticipants = $this->purchases()
             ->where('status', 'completed')
+            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                $query->whereNotIn('identificacion', $blacklistedIds);
+            })
             ->get()
             ->unique(function ($purchase) {
-                // Si tiene usuario autenticado, usa user_id, sino usa email
                 return $purchase->user_id ?? $purchase->email;
             })
             ->count();
 
-        // Separar participantes autenticados vs guests
+        // ✅ Separar participantes autenticados vs guests (EXCLUYENDO lista negra)
         $authenticatedCount = $this->purchases()
             ->where('status', 'completed')
             ->whereNotNull('user_id')
+            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                $query->whereNotIn('identificacion', $blacklistedIds);
+            })
             ->distinct('user_id')
             ->count('user_id');
 
         $guestCount = $this->purchases()
             ->where('status', 'completed')
             ->whereNull('user_id')
+            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                $query->whereNotIn('identificacion', $blacklistedIds);
+            })
             ->distinct('email')
             ->count('email');
+
+        // ✅ Calcular ingresos totales (EXCLUYENDO lista negra)
+        $totalRevenue = $this->purchases()
+            ->where('status', 'completed')
+            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                $query->whereNotIn('identificacion', $blacklistedIds);
+            })
+            ->sum('amount');
 
         return [
             'total_numbers' => $totalNumbers,
             'sold_numbers' => $soldNumbers,
             'available_numbers' => $availableNumbers,
             'percentage_sold' => round($percentageSold, 2),
-            'total_revenue' => $this->purchases()
-                ->where('status', 'completed')
-                ->sum('amount'),
+            'total_revenue' => $totalRevenue,
             'total_participants' => $uniqueParticipants,
             'authenticated_participants' => $authenticatedCount,
             'guest_participants' => $guestCount,
             'has_winner' => !is_null($this->winner_number),
         ];
     }
-
     public function getTicketAvailability(string $ticketNumber): array
     {
         // Validar rango
@@ -449,5 +473,18 @@ class Event extends Model
                 ];
             }),
         ];
+    }
+    public function blacklistedIdentifications()
+    {
+        return $this->hasMany(EventBlacklistedIdentification::class);
+    }
+
+    public function isIdentificationBlacklisted(string $identificacion): bool
+    {
+        $normalized = Purchase::normalizeIdentificacion($identificacion);
+
+        return $this->blacklistedIdentifications()
+            ->where('identificacion', $normalized)
+            ->exists();
     }
 }

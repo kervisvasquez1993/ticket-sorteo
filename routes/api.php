@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\EmailController;
 use App\Http\Controllers\Api\Event\EventController;
+use App\Http\Controllers\Api\EventBlacklist\EventBlacklistController;
 use App\Http\Controllers\Api\EventPrice\EventPriceController;
 use App\Http\Controllers\Api\EventPrize\EventPrizeController;
 use App\Http\Controllers\Api\NotificationController;
@@ -36,7 +37,7 @@ Route::get('/events-prices', [EventPriceController::class, 'index']);
 Route::get('payment-methods/active', [PaymentMethodController::class, 'active']);
 Route::get('purchases/event/{eventId}/top-buyers', [PurchaseController::class, 'getTopBuyers']);
 Route::get('purchases/event/{eventId}/available-numbers', [PurchaseController::class, 'getAvailableNumbers']);
-    // Route::get('/check-number/{ticketNumber}', [PurchaseController::class, 'checkSingleNumber']);
+// Route::get('/check-number/{ticketNumber}', [PurchaseController::class, 'checkSingleNumber']);
 // ============================================
 // RUTAS PÚBLICAS - COMPRAS (PURCHASES)
 // ============================================
@@ -143,6 +144,14 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/events-prices/{id}', [EventPriceController::class, 'destroy']);
         Route::put('/events-prices/{id}', [EventPriceController::class, 'update']);
         Route::patch('/events-prices/{id}/set-default', [EventPriceController::class, 'setAsDefault']);
+    });
+});
+Route::middleware('auth:api')->group(function () {
+    Route::post('/events-create-blacklist', [EventBlacklistController::class, 'store']);
+    Route::prefix('events/{eventId}/blacklist')->group(function () {
+        Route::get('/', [EventBlacklistController::class, 'index']);
+
+        Route::delete('/{identificacion}', [EventBlacklistController::class, 'destroy']);
     });
 });
 

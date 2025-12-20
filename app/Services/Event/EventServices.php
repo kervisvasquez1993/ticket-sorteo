@@ -70,21 +70,38 @@ class EventServices implements IEventServices
     {
         try {
             $event = $this->eventRepository->getEventById($id);
-            $statistics = $event->getStatistics();
+            $statistics = $event->getStatistics(); // ✅ Este YA excluye lista negra
 
+            // ✅ Obtener IDs de lista negra
+            $blacklistedIds = $event->blacklistedIdentifications()
+                ->pluck('identificacion')
+                ->toArray();
+
+            // ✅ EXCLUIR lista negra en totalParticipants
             $totalParticipants = $event->purchases()
                 ->where('status', 'completed')
                 ->whereNotNull('user_id')
+                ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                    $query->whereNotIn('identificacion', $blacklistedIds);
+                })
                 ->distinct('user_id')
                 ->count('user_id');
 
+            // ✅ EXCLUIR lista negra en guestPurchases
             $guestPurchases = $event->purchases()
                 ->where('status', 'completed')
                 ->whereNull('user_id')
+                ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                    $query->whereNotIn('identificacion', $blacklistedIds);
+                })
                 ->count();
 
+            // ✅ EXCLUIR lista negra en revenueByurrency
             $revenueByurrency = $event->purchases()
                 ->where('status', 'completed')
+                ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                    $query->whereNotIn('identificacion', $blacklistedIds);
+                })
                 ->select('currency')
                 ->selectRaw('SUM(amount) as total_amount')
                 ->selectRaw('COUNT(*) as count')
@@ -98,7 +115,11 @@ class EventServices implements IEventServices
                     ];
                 });
 
+            // ✅ EXCLUIR lista negra en purchasesSummary
             $purchasesSummary = $event->purchases()
+                ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
+                    $query->whereNotIn('identificacion', $blacklistedIds);
+                })
                 ->select('status')
                 ->selectRaw('COUNT(*) as count')
                 ->selectRaw('SUM(total_amount) as total_amount')
@@ -131,7 +152,7 @@ class EventServices implements IEventServices
                         'created_at' => $event->created_at,
                         'updated_at' => $event->updated_at,
                     ],
-                    'statistics' => $statistics,
+                    'statistics' => $statistics, // ✅ Ya excluye lista negra
                     'participants_summary' => [
                         'total_registered_users' => $totalParticipants,
                         'total_guest_purchases' => $guestPurchases,

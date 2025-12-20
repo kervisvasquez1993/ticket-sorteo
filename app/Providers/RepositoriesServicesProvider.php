@@ -6,6 +6,8 @@ use App\Interfaces\Auth\IAuthRepository;
 use App\Interfaces\Auth\IAuthServices;
 use App\Interfaces\Event\IEventRepository;
 use App\Interfaces\Event\IEventServices;
+use App\Interfaces\EventBlacklist\IEventBlacklistRepository;
+use App\Interfaces\EventBlacklist\IEventBlacklistServices;
 use App\Interfaces\EventPrice\IEventPriceRepository;
 use App\Interfaces\EventPrice\IEventPriceServices;
 use App\Interfaces\EventPrize\IEventPrizeRepository;
@@ -18,6 +20,7 @@ use App\Interfaces\WhatsAppStatus\IWhatsAppStatusRepository;
 use App\Interfaces\WhatsAppStatus\IWhatsAppStatusServices;
 use App\Repository\Auth\AuthRepository;
 use App\Repository\Event\EventRepository;
+use App\Repository\EventBlacklist\EventBlacklistRepository;
 use App\Repository\EventPrice\EventPriceRepository;
 use App\Repository\EventPrize\EventPrizeRepository;
 use App\Repository\PaymentMethod\PaymentMethodRepository;
@@ -25,6 +28,7 @@ use App\Repository\Purchase\PurchaseRepository;
 use App\Repository\WhatsAppStatus\WhatsAppStatusRepository;
 use App\Services\Auth\AuthServices;
 use App\Services\Event\EventServices;
+use App\Services\EventBlacklist\EventBlacklistServices;
 use App\Services\EventPrice\EventPriceServices;
 use App\Services\EventPrize\EventPrizeServices;
 use App\Services\PaymentMethod\PaymentMethodServices;
@@ -39,6 +43,8 @@ class RepositoriesServicesProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(IEventBlacklistRepository::class, EventBlacklistRepository::class);
+        $this->app->bind(IEventBlacklistServices::class, EventBlacklistServices::class);
         $this->app->bind(IWhatsAppStatusRepository::class, WhatsAppStatusRepository::class);
         $this->app->bind(IWhatsAppStatusServices::class, WhatsAppStatusServices::class);
         $this->app->bind(IEventPrizeRepository::class, EventPrizeRepository::class);
