@@ -284,50 +284,38 @@ class Event extends Model
             ->pluck('identificacion')
             ->toArray();
 
-        // ✅ Contar números vendidos (EXCLUYENDO lista negra)
+        // ✅ Contar números vendidos (INCLUYENDO lista negra para el porcentaje)
         $soldNumbers = $this->purchases()
             ->whereNotNull('ticket_number')
             ->where('status', 'completed')
-            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
-                $query->whereNotIn('identificacion', $blacklistedIds);
-            })
-            ->count();
+            ->count(); // SIN filtrar lista negra
 
         $availableNumbers = $totalNumbers - $soldNumbers;
         $percentageSold = $totalNumbers > 0 ? ($soldNumbers / $totalNumbers) * 100 : 0;
 
-        // ✅ Contar participantes únicos (EXCLUYENDO lista negra)
+        // ✅ Contar participantes únicos (INCLUYENDO lista negra)
         $uniqueParticipants = $this->purchases()
             ->where('status', 'completed')
-            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
-                $query->whereNotIn('identificacion', $blacklistedIds);
-            })
             ->get()
             ->unique(function ($purchase) {
                 return $purchase->user_id ?? $purchase->email;
             })
             ->count();
 
-        // ✅ Separar participantes autenticados vs guests (EXCLUYENDO lista negra)
+        // ✅ Separar participantes autenticados vs guests (INCLUYENDO lista negra)
         $authenticatedCount = $this->purchases()
             ->where('status', 'completed')
             ->whereNotNull('user_id')
-            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
-                $query->whereNotIn('identificacion', $blacklistedIds);
-            })
             ->distinct('user_id')
             ->count('user_id');
 
         $guestCount = $this->purchases()
             ->where('status', 'completed')
             ->whereNull('user_id')
-            ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
-                $query->whereNotIn('identificacion', $blacklistedIds);
-            })
             ->distinct('email')
             ->count('email');
 
-        // ✅ Calcular ingresos totales (EXCLUYENDO lista negra)
+        // ✅ Calcular ingresos totales (EXCLUYENDO lista negra) ← SOLO AQUÍ se excluye
         $totalRevenue = $this->purchases()
             ->where('status', 'completed')
             ->when(!empty($blacklistedIds), function ($query) use ($blacklistedIds) {
@@ -340,7 +328,7 @@ class Event extends Model
             'sold_numbers' => $soldNumbers,
             'available_numbers' => $availableNumbers,
             'percentage_sold' => round($percentageSold, 2),
-            'total_revenue' => $totalRevenue,
+            'total_revenue' => $totalRevenue, // ← SOLO los ingresos excluyen lista negra
             'total_participants' => $uniqueParticipants,
             'authenticated_participants' => $authenticatedCount,
             'guest_participants' => $guestCount,
@@ -455,8 +443,8 @@ class Event extends Model
                 'winner_number' => $this->winner_number,
                 'image_url' => $this->image_url,
             ],
-            'winner' => $this->getWinnerInfo(), // Ya tienes este método
-            'statistics' => $this->getStatistics(), // Ya tienes este método
+            'winner' => $this->getWinnerInfo(),
+            'statistics' => $this->getStatistics(),
             'main_prize' => $mainPrize ? [
                 'id' => $mainPrize->id,
                 'title' => $mainPrize->title,
